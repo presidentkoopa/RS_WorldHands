@@ -1,0 +1,41 @@
+// RS_WorldHands -- the ten handlers the hand system registers.
+//
+// TEN OF THE SIXTEEN RS_VR_Unified declared. The other six belong to holsters
+// (RS_HolsterManager), reload (RR_Reload) and the wheel (wr_Rig,
+// wr_Constellation, wr_Honeycomb, wr_StatEvents) and stay with those packages.
+// AddEventHandlers APPENDS across pk3s rather than replacing, so loading this
+// beside them produces the same combined list it always did.
+//
+// ORDER IS LOAD-BEARING AND IT IS CARRIED VERBATIM.
+//
+// Not one handler here declares an Order, so GZDoom falls back to registration
+// sequence -- which makes the list below the actual ordering rather than a
+// formatting choice. It is the relative order these ten had inside Unified,
+// with the six foreign entries removed and nothing resequenced. Do not tidy
+// it alphabetically.
+//
+// Foundation first: the hands publish pose and basis and resolve their own
+// grab before anything reads either.
+//
+//   RS_HandsAlwaysOn      the always-on psprite hand layers
+//   RS_HandWorldHandler   the WORLD hands on the controller transform
+//   RS_GrabPolicy         what is grabbable, and as what
+//   RS_Stabilize          the off hand braces the main hand's weapon
+//   RS_GrabHandler        the grab itself
+//   RS_Swing              melee arc off controller motion
+//   RS_Held               what each hand is holding, and the grip claim
+//   RS_Pull               distance grab -- the laser, the reel, the flick
+//   RS_Route              where a grabbed thing is routed on release
+//   RS_GrabViz            the ovals, the colour flash, the beam
+//
+// AND THE TRAP, worth keeping because it is not obvious and it bites once:
+// this list is TWO OPPOSITE ORDERINGS. WorldTick and NetworkProcess run FRONT
+// TO BACK (first registered, first called). InputProcess and UiProcess run
+// BACK TO FRONT -- EventManager::Responder in src/events.cpp walks
+// `handler = LastEventHandler; handler; handler = handler->prev`. Nothing here
+// overrides InputProcess today, so it is currently moot; the day one of these
+// does, it will be polled in the reverse of the order written above.
+GameInfo
+{
+	AddEventHandlers = "RS_HandsAlwaysOn", "RS_HandWorldHandler", "RS_GrabPolicy", "RS_Stabilize", "RS_GrabHandler", "RS_Swing", "RS_Held", "RS_Pull", "RS_Route", "RS_GrabViz", "RS_WorldFistGiver"
+}

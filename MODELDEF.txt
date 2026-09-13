@@ -1,0 +1,346 @@
+// RS_WorldHands -- nine model definitions.
+//
+//   RS_HandIdleMain / RS_HandIdleOff    the always-on psprite hands
+//   RS_HandWorldMain / RS_HandWorldOff  the WORLD hands, on the controller
+//   RS_GrabOvalMain / RS_GrabOvalOff    the reach gauges
+//   RS_FaceVol                          the face volume
+//   RS_StabOval                         the two-hand brace point
+//   RS_VolumeBox                        the debug box
+//
+// PlacementCVars on five of them (rs_hw_main, rs_hw_off, rs_grab_m, rs_grab_o,
+// rs_stab) is the ONLY placement channel these have, and it is the one that
+// moves the model live while a menu is open. NOTHING IN ZSCRIPT MAY WRITE
+// these actors' Scale/angle/pitch/roll: two writers on one transform reads
+// exactly like a dead slider, and that cost a full night on 2026-09-07.
+// See EngineDocs5.0.x/PLACEMENT.md.
+//
+// Everything below this line is carried verbatim from RS_VR_Unified.
+
+// Rigged VR hands, as a fist weapon.
+//
+// Frame layout mirrors RS_Main's RS_GH_Fist, which drives its swing off sprite
+// frames: A -> model frame 0, B -> 1, C -> 4, D -> 6. The animation baked into
+// these models is authored to those exact indices -- open at 0, closing through
+// 1, fist driving forward at 4, follow through at 6.
+//
+// NOAUTOREVERSE matters here. The engine mirrors whichever model lands on the
+// left physical controller so one weapon mesh can serve both hands. These are
+// two purpose-built left and right meshes, so that mirror would flip an
+// already-correct hand. RS_GH_Fist needs the mirror (Scale -1 mainhand, +1
+// offhand) precisely because it is one mesh; we do not.
+
+
+
+// ---------------------------------------------------------------------
+// ALWAYS-ON HANDS
+//
+// Separate from the fist weapon above, and they have to be. A weapon owns
+// its hand slot, so a fist model is only ever drawn when nothing else is
+// equipped -- it cannot show a hand and a gun on the same controller.
+// These ride their own psprite layers instead, so they are visible no
+// matter what is held.
+//
+// BaseFrame, not FrameIndex, and it must come last. BaseFrame is the only
+// thing that registers into BaseSpriteModelFrames and sets hasmodel, which
+// is what a +DECOUPLEDANIMATIONS actor's model lookup reads. Without it the
+// psprite falls through to the sprite path and nothing is drawn.
+// ---------------------------------------------------------------------
+
+// There is no hand_right.iqm any more, and its absence is deliberate. The file
+// that used to ship here was never referenced by either block below, and it was
+// STALE: built from an older pose list carrying 11 baked poses where hand_left
+// carries 20. Anything that switched to it would have silently lost nine poses
+// and shifted every index above 10. A 600KB file that looks current and is not
+// is worse than no file at all. If a genuinely separate right-hand mesh is ever
+// wanted, rebuild it from hand_final.fbx with tools/tools_export_poses.py
+// rather than resurrecting that one.
+
+// Both hands use hand_left.iqm, and the main hand mirrors it with a negative
+// X scale. That is not a workaround, it is the convention every other weapon
+// model here follows (RS_GH_Fist, VanillaVRPlus: Scale -1 one hand, +1 the
+// other).
+//
+// The reason: measured signed volume of the two meshes is -1288.6 and +1288.6
+// -- identical magnitude, opposite sign, so they are true mirrors and the pair
+// is geometrically correct. But this HUD path flips normals unconditionally, so
+// the negative-winding mesh is the one that shades correctly and the positive
+// one renders inside out. Driving the mirror from scale instead keeps shading
+// right, because the renderer watches for a negative scale product and flips
+// face culling to match.
+Model RS_HandIdleMain
+{
+	Path "models/hands"
+	Model 0 "hand_left.iqm"
+	Skin 0 "hand_basecolor.png"
+	Scale -1.0 1.0 1.0
+	Offset 0.0 -18.0 -12.0
+	UseHandOffsets
+	NOAUTOREVERSE
+	PitchOffset 90.0
+	RollOffset 0.0
+	AngleOffset 0.0
+	BaseFrame
+}
+
+Model RS_HandIdleOff
+{
+	Path "models/hands"
+	Model 0 "hand_left.iqm"
+	Skin 0 "hand_basecolor.png"
+	Scale 1.0 1.0 1.0
+	Offset 0.0 -18.0 -12.0
+	NOAUTOREVERSE
+	UseHandOffsets
+	PitchOffset 90.0
+	RollOffset 0.0
+	AngleOffset 0.0
+	BaseFrame
+}
+
+
+// ===========================================================================
+// WORLD-ACTOR HANDS. Same wire as the world M9: MDL_FOLLOWMAINHAND/OFFHAND make
+// the model take its transform from GetWeaponTransform at DRAW time, instead of
+// from wherever script last put the actor at 35Hz.
+//
+// Scale 0.01. MEASURED, not derived from a target size, and it is one clean
+// number because the two render paths differ by exactly one factor of 100.
+//
+// BOTH PATHS START FROM THE SAME MATRIX. GetWeaponTransform (hw_vrmodes.cpp:1483)
+// hands back the controller pose with mat->scale(vr_vunits_per_meter) already
+// applied (vk_openxrdevice.cpp:5926), so downstream of it mesh space is METRES on
+// both paths. They then diverge in one place and one place only:
+//
+//   HUD path   RenderHUDModel applies a further scale(0.01f) (models.cpp:934-937),
+//              documented there as the model-unit conversion every hud model needs.
+//   WORLD path ObjectToWorldMatrix applies no such factor -- MODELDEF Scale goes
+//              straight into step 3 (models.cpp:849).
+//
+// So a world Scale of 0.01 draws a followed model at EXACTLY the size the same
+// mesh draws at on a psprite with Scale 1.0. That is the whole derivation, and it
+// needs no anatomy: the psprite hands are the size that was signed off in a
+// headset, and this matches them by construction.
+//
+// Cross-check against the mesh. hand_left.iqm bbox extent measured from its
+// POSITION vertex array is 14.9882 x 9.0510 x 32.9533, longest axis 32.9533.
+//   psprite: 32.9533 * 1.0 (MODELDEF) * 1.0 (rs_hand_scale -> psp.scale,
+//            rs_hands.zs:392-396 -> pspScale, models.cpp:985) * 0.01 = 0.3295 m
+//   world:   32.9533 * 0.01 * 1.0 (rs_hw_*_scale -> wPlaceScale) = 0.3295 m
+//
+// WHAT WAS HERE BEFORE, AND WHY IT DREW NOTHING AT ALL. This line read 0.196035,
+// derived as "a 0.19 m hand must occupy 6.46 map units: 6.46 / 32.9533". That is
+// two compounding mistakes, and they multiply out exactly:
+//
+//   x34.0000  spends vr_vunits_per_meter a second time, when GetWeaponTransform
+//             has already spent it -- the file header's own "100x class of bug".
+//   x0.5766   targets 0.19 m, but the psprite hand these are meant to match is
+//             0.3295 m: this mesh is a hand AND forearm (bbox runs -22.35 to
+//             +10.60 on its long axis), not a bare palm.
+//   ------
+//   x19.6035  net. And 0.196035 / 0.01 = 19.6035. The two readings agree to six
+//             figures, so nothing else is going on here.
+//
+// The symptom was NOT a big hand. 32.9533 * 0.196035 = 6.46 m, centred on a
+// controller roughly half a metre from the face: the camera sits inside the mesh,
+// and a surface seen from inside is backface-culled away. World hands read as
+// "never drawn anywhere", indistinguishable from the feature being unwired. That
+// is why it survived -- and why the tuning sliders could not find it either, since
+// rs_hw_main_scale / rs_hw_off_scale bottom out at 0.05 (MENUDEF.txt:69, :78)
+// while the correction needed was 1/19.6 = 0.051. Just out of reach.
+//
+// The main hand keeps the negative X. These are ONE mesh mirrored, and this path
+// watches for a negative scale product to flip face culling to match; dropping
+// the sign renders the main hand inside out.
+// ===========================================================================
+
+Model RS_HandWorldMain
+{
+	Path "models/hands"
+	Model 0 "hand_left.iqm"
+	PlacementCVars rs_hw_main
+	// SKIN IS LOAD-BEARING, AND ITS ABSENCE IS SILENT.
+	// IQMModel::RenderFrame (models_iqm.cpp:521-537) resolves a mesh skin in three
+	// steps -- MODELDEF Skin, then SurfaceSkin, then the material name baked into
+	// the IQM -- and if all three miss it hits "continue" and SKIPS THE MESH. Not a
+	// white model, not a warning: no draw at all, nothing in the log.
+	// hand_left.iqm names its material "aiStandardSurface1", a Maya default that
+	// exists nowhere in this pk3, so these two blocks drew nothing from the day they
+	// were written. Both psprite blocks above always carried a Skin, which is why
+	// only the world hands were affected.
+	Skin 0 "hand_basecolor.png"
+
+	// PLACEMENT, FOUND IN A HEADSET 2026-08-30 AND FOLDED IN HERE.
+	//
+	// These are not guesses: they are the rs_hw_*_ofs_* / _pitch / _roll values
+	// that were dialled in on the sliders until the mesh sat correctly on the
+	// controller, transferred verbatim. That transfer is exact rather than
+	// approximate -- ObjectToWorldMatrix sums the slider into the SAME translate
+	// and rotate calls as these fields (models.cpp:855-861), which is the whole
+	// reason the placement cvars were built to fold in rather than apply after.
+	//
+	// So the sliders go back to zero and nothing moves. Anyone tuning from here
+	// starts from neutral instead of from someone else's correction.
+	//
+	// Both hands take the SAME numbers. They are one mesh mirrored on X, and a
+	// mirror does not change which way is forward or up -- only the sign of the
+	// scale, which stays on the Scale line where it belongs.
+	//
+	// Scale stayed at slider 1.0, so the derived 0.01 was right and is unchanged.
+	Scale -1.0 1.0 1.0
+	Offset 0.0 0.1 -0.05
+	AngleOffset 0.0
+	PitchOffset 90.0
+	RollOffset -90.0
+	NOAUTOREVERSE
+	FollowMainHand
+	BaseFrame
+}
+
+Model RS_HandWorldOff
+{
+	Path "models/hands"
+	Model 0 "hand_left.iqm"
+	PlacementCVars rs_hw_off
+	// SKIN IS LOAD-BEARING, AND ITS ABSENCE IS SILENT.
+	// IQMModel::RenderFrame (models_iqm.cpp:521-537) resolves a mesh skin in three
+	// steps -- MODELDEF Skin, then SurfaceSkin, then the material name baked into
+	// the IQM -- and if all three miss it hits "continue" and SKIPS THE MESH. Not a
+	// white model, not a warning: no draw at all, nothing in the log.
+	// hand_left.iqm names its material "aiStandardSurface1", a Maya default that
+	// exists nowhere in this pk3, so these two blocks drew nothing from the day they
+	// were written. Both psprite blocks above always carried a Skin, which is why
+	// only the world hands were affected.
+	Skin 0 "hand_basecolor.png"
+
+	// PLACEMENT, FOUND IN A HEADSET 2026-08-30 AND FOLDED IN HERE.
+	//
+	// These are not guesses: they are the rs_hw_*_ofs_* / _pitch / _roll values
+	// that were dialled in on the sliders until the mesh sat correctly on the
+	// controller, transferred verbatim. That transfer is exact rather than
+	// approximate -- ObjectToWorldMatrix sums the slider into the SAME translate
+	// and rotate calls as these fields (models.cpp:855-861), which is the whole
+	// reason the placement cvars were built to fold in rather than apply after.
+	//
+	// So the sliders go back to zero and nothing moves. Anyone tuning from here
+	// starts from neutral instead of from someone else's correction.
+	//
+	// Both hands take the SAME numbers. They are one mesh mirrored on X, and a
+	// mirror does not change which way is forward or up -- only the sign of the
+	// scale, which stays on the Scale line where it belongs.
+	//
+	// Scale stayed at slider 1.0, so the derived 0.01 was right and is unchanged.
+	Scale 1.0 1.0 1.0
+	Offset 0.0 0.1 -0.05
+	AngleOffset 0.0
+	PitchOffset 90.0
+	RollOffset -90.0
+	NOAUTOREVERSE
+	FollowOffHand
+	BaseFrame
+}
+
+
+// ---------------------------------------------------------------------
+// THE REACH VOLUME and THE COLLISION VOLUME
+//
+// These live in the HANDS package because they are properties of a hand, not of
+// anything it might pick up. They were written inside a weapon package, and
+// deleting that weapon took the hands' grab gauge with it.
+//
+// FLAGS MUST PRECEDE THE FrameIndex LINES. Each FrameIndex pushes a copy of the
+// model frame with the flags set at that moment, so a flag written after the
+// last FrameIndex parses cleanly and applies to nothing.
+// ---------------------------------------------------------------------
+
+Model RS_GrabOvalMain
+{
+	Path "models"
+	Model 0 "rs_wiresphere.obj"
+	Skin  0 "rs_grab_idle.png"
+	// Unit radius mesh, so the per-axis placement scale IS the semi-axis --
+	// rs_grab_m_scale_x/_y/_z, the same three RS_Reach tests against.
+	//
+	// IN WHAT UNITS is the open question, and this comment used to answer it
+	// flatly with "map units" while CVARINFO.txt answered it just as flatly with
+	// "a unit-radius mesh arrives already metres across". Both cannot be right
+	// and neither was ever checked against the headset. FollowMainHand means the
+	// base transform is GetWeaponTransform, which carries a scale of
+	// vr_vunits_per_meter -- so mesh space is metres and the CVARINFO reading is
+	// the better-evidenced one. It is still a headset question, and the answer
+	// now lives on rs_grab_scale_space rather than in an assertion in a comment.
+	//
+	// AND THE LETTERS ARE THE ENGINE'S, not ours: _scale_x scales the SIDEWAYS
+	// axis here, because it multiplies the same matrix component _ofs_x
+	// translates and vr_hand_ofs_x is captioned "Left / Right". The script test
+	// had x on forward until 2026-08-26.
+	Scale 100.0 100.0 100.0
+	PlacementCVars rs_grab_m
+	FollowMainHand
+	FrameIndex RSGB A 0 0
+	FrameIndex RSGB B 0 0
+}
+
+// The face volume. No Follow flag -- it is placed at HmdPos from script rather
+// than carried by a controller, and it uses the actor's own Scale rather than
+// PlacementCVars because a sphere has one radius and not three.
+Model RS_FaceVol
+{
+	Path "models"
+	Model 0 "rs_wiresphere.obj"
+	Skin  0 "rs_vol_idle.png"
+	Scale 1.0 1.0 1.0
+	FrameIndex RSGB A 0 0
+	FrameIndex RSGB B 0 0
+}
+
+Model RS_GrabOvalOff
+{
+	Path "models"
+	Model 0 "rs_wiresphere.obj"
+	Skin  0 "rs_grab_idle.png"
+	Scale 100.0 100.0 100.0
+	PlacementCVars rs_grab_o
+	FollowOffHand
+	FrameIndex RSGB A 0 0
+	FrameIndex RSGB B 0 0
+}
+
+// THE TWO-HAND SUPPORT POINT, drawn on the weapon in the main hand. Same
+// unit-radius mesh as the reach ovals and the same arrangement: it rides the
+// main hand through FollowMainHand, and its size and place come from the
+// rs_stab placement cvars, which RS_Stabilize fills per weapon model and the
+// menu's sliders edit. The renderer reads those cvars by name every frame,
+// which is what lets the oval move while the menu holds the playsim -- and
+// the script test converts them through the very same RS_Reach helpers the
+// hand ovals use, so the oval you see is the one that braces.
+Model RS_StabOval
+{
+	Path "models"
+	Model 0 "rs_wiresphere.obj"
+	Skin  0 "rs_vol_idle.png"
+	Scale 100.0 100.0 100.0
+	PlacementCVars rs_stab
+	FollowMainHand
+	FrameIndex RSGB A 0 0
+	FrameIndex RSGB B 0 0
+}
+
+// Unit box spanning -1..1, so the actor's Scale is literally the half-extent.
+// No Follow flag -- this one sits on a thing out in the world, not on your hand.
+Model RS_VolumeBox
+{
+	Path "models"
+	// ONE slot, hot skin: the box is only ever shown in its Hot state, and
+	// a second slot is drawn every frame regardless of FrameIndex (see the
+	// RS_HolsterMarker note), so idle+hot were always painted together.
+	Model 0 "rs_wirebox.obj"
+	Skin  0 "rs_vol_hot.png"
+	Scale 1.0 1.0 1.0
+
+	USEACTORPITCH
+	USEACTORROLL
+
+	FrameIndex RSGB A 0 0
+	FrameIndex RSGB B 0 0
+}
+

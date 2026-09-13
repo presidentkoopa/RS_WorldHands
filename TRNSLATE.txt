@@ -1,0 +1,25 @@
+// ============================================================
+// from RS_Hands  (TRNSLATE.txt)
+// ============================================================
+// Colours for the grab flash.
+//
+// COLOURISE REMAPS, not stencil. Stencil would flatten the thing to a silhouette
+// and throw away every bit of shading a voxel has -- which is most of what makes
+// a voxel read as an object rather than a coloured blob. These map the existing
+// brightness ramp onto a colour, so a barrel stays a barrel and simply goes
+// orange.
+//
+// The ramps run past 1.0 on the dominant channel on purpose. A pickup lying in
+// an unlit corner has very little brightness to remap, and a ramp that tops out
+// at white leaves it a muddy brown; overdriving lifts it clear of whatever it is
+// sitting on, which is the entire job.
+
+RS_GrabOrange = "0:255=%[0.00,0.00,0.00]:[1.70,0.78,0.16]"
+RS_GrabGreen  = "0:255=%[0.00,0.00,0.00]:[0.32,1.70,0.44]"
+
+// The third colour: a destination will accept this. Cyan rather than anything
+// warmer because red is vr_laser_color's and orange and green are already spoken
+// for -- and because it is the one hue nothing else in this system uses.
+RS_GrabCyan   = "0:255=%[0.00,0.00,0.00]:[0.25,1.45,1.70]"
+
+

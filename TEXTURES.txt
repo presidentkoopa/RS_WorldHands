@@ -1,0 +1,27 @@
+// RS_WorldHands -- sprite fallbacks for the reach and volume gauges.
+//
+// MODELDEF cannot attach a model to a sprite name that nothing has defined, so
+// these exist purely to give it something to bind to. The wireframe models are
+// what actually render.
+//
+// Offset is dead centre rather than bottom-origin: these mark a point in space,
+// not an object standing on a floor.
+//
+// The RSHM* (holster marker) and RSHP* (hardpoint marker) blocks that sat
+// beside these in RS_VR_Unified are deliberately NOT here -- they belong to
+// those packages and follow them.
+Sprite "RSGBA0", 32, 32
+{
+	Offset 16, 16
+	XScale 10.6
+	YScale 10.6
+	Patch "rsgba0", 0, 0
+}
+
+Sprite "RSGBB0", 32, 32
+{
+	Offset 16, 16
+	XScale 10.6
+	YScale 10.6
+	Patch "rsgbb0", 0, 0
+}

@@ -1,0 +1,63 @@
+// RS_WorldHands -- the VR hand system, lifted whole out of RS_VR_Unified
+// on 2026-09-08.
+//
+// WHAT THIS IS. Hands that exist in the world rather than on the HUD: they
+// track the controllers at headset rate, close on things, carry them, pass
+// them between each other, pull them in from across the room on a beam, throw
+// them, and brace one hand's weapon with the other.
+//
+// NOTHING WAS STRIPPED IN THE MOVE. The twelve source files below are byte
+// identical to Unified's. What changed is only the packaging around them --
+// MAPINFO lost the six foreign handlers, MENUDEF grew its own root, CVARINFO
+// was rejoined from the two places Unified had split it.
+//
+// ---------------------------------------------------------------------------
+// VERSION 5.0.0, AND IT IS A FLOOR RATHER THAN A PREFERENCE.
+//
+// zscript/hands/rs_grab.zs calls a native gated at version("4.15.1"), so a
+// build declaring less does not degrade gracefully -- it fails to compile.
+// The engine is UZDXREMA (UZDoom 5.0.0-rc.2, E:\UZDXREMA src/version.h).
+version "5.0.0"
+
+// ---------------------------------------------------------------------- ORDER
+// ZScript resolves symbols across the whole compilation unit, so include order
+// does not affect linking. It DOES decide which file a duplicate-symbol error
+// is reported against, and it documents the dependency direction. Carried in
+// Unified's order, unchanged.
+#include "zscript/hands/rs_hands.zs"
+#include "zscript/hands/handworld.zs"
+#include "zscript/hands/rs_fist.zs"
+#include "zscript/hands/rs_grabpolicy.zs"
+#include "zscript/hands/rs_held.zs"
+#include "zscript/hands/rs_swing.zs"
+#include "zscript/hands/rs_throw.zs"
+#include "zscript/hands/rs_distance.zs"
+#include "zscript/hands/rs_grab.zs"
+#include "zscript/hands/rs_route.zs"
+#include "zscript/hands/rs_grabviz.zs"
+#include "zscript/hands/rs_stabilize.zs"
+
+// THE FIST, as a weapon. Lives with the hands because the thing you punch with
+// IS the hand -- see the file. Replaces the vanilla Fist, so every weapon set
+// loaded beside this one gets it without knowing.
+#include "zscript/hands/rs_fistweapon.zs"
+
+// -- the grip arbiter --------------------------------------------------------
+// MOVED WITH THE HANDS, and the reason is that two of its four consumers ARE
+// hands files: rs_held.zs and rs_stabilize.zs both claim, test and release
+// through it. RS_Holsters and RR_Reload are the other two, and they reach it
+// exactly as these do -- by string, through ServiceIterator -- so it does not
+// matter to them which pk3 it ships in.
+//
+// A Service needs no MAPINFO entry: InitServices() (vmnatives.cpp:62-75,
+// called from info.cpp:383) walks PClass::AllClasses and instantiates every
+// Service subclass by itself. Nothing names this class at compile time in
+// either direction, which is the whole reason it is a Service and not an
+// EventHandler -- EventHandler.Find("Literal") resolves at COMPILE time and a
+// miss is fatal AND GLOBAL (thingdef.cpp:420-424 refuses every pk3 later in
+// the load order). One missing optional pk3 would take the game down.
+//
+// IT SHIPS IN EXACTLY ONE PK3. Two copies is a duplicate-class compile error,
+// not two ledgers -- so if RS_VR_Unified is ever loaded beside this, its copy
+// has to come out. That is true of all thirty classes here, not just this one.
+#include "zscript/arbiter/rs_griparbiter.zs"

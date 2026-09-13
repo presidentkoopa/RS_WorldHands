@@ -1,0 +1,651 @@
+// RS_WorldHands -- the hand system's menus.
+//
+// ITS OWN ROOT, hooked directly into the engine's options menu rather than
+// nested under RS_VR_Unified's. This package must be usable with Unified
+// absent, and a Submenu pointing at a menu that does not exist is a dead row,
+// not an error -- so depending on another mod's menu structure would leave a
+// silent hole exactly when this ships alone.
+//
+// THIRTEEN PAGES AND FIVE OPTION LISTS, and the count is worth stating because
+// an audit of this set on 2026-09-07 reported eleven. The two it missed were
+// RS_HandsMainPlacement and RS_HandsOffPlacement -- the PLACEMENT SLIDER pages,
+// the ones that write the PlacementCVars the renderer reads live. Losing those
+// two loses the only working way to position a hand.
+//
+// ---------------------------------------------------------------------------
+// THE ROOT BELOW IS NOT DECORATION. THREE SIBLINGS, NOT ONE.
+//
+// RS_HandsOptions links ONLY the two placement pages. Everything else --
+// grab, distance grab, throwing, feedback, the aiming ray, what is grabbable,
+// two-hand stabilize -- hung off RS_VRUnifiedOptions, which lived in the
+// package this was lifted out of and is NOT here.
+//
+// So hooking "Hands" alone into the options menu compiles clean, loads clean,
+// and leaves ten of the thirteen pages with nothing pointing at them. In a
+// headset that reads as the grab system having been stripped out, when in fact
+// every cvar, class and row is present and merely unreachable. Keep all three
+// rows.
+
+AddOptionMenu "OptionsMenu"
+{
+	Submenu "VR World Hands", "RS_WorldHandsOptions"
+}
+AddOptionMenu "OptionsMenuSimple"
+{
+	Submenu "VR World Hands", "RS_WorldHandsOptions"
+}
+
+OptionMenu "RS_WorldHandsOptions"
+{
+	Title "VR World Hands"
+	StaticText ""
+	Submenu "Hands",              "RS_HandsOptions"
+	Submenu "Hand Grab",          "RS_GrabMenu"
+	Submenu "Two-hand Stabilize", "RS_StabMenu"
+}
+
+OptionMenu "RS_HandsOptions"
+{
+	Title "RS Hands"
+
+	StaticText ""
+	Option "Show Hands (psprite)",  "rs_hands",      "OnOff"
+	// These and "World hands" below are ALTERNATIVES, not layers. Both on
+	// draws two hands per controller in the same place.
+	Option "Hands as fists",  "rs_hands_fists", "OnOff"
+	Slider "Pose blend tics",  "rs_hands_blend", 0, 12, 0.5, 1
+	Slider "Hand Scale",  "rs_hand_scale", 0.1, 3.0, 0.05, 2
+
+	StaticText " "
+	Submenu "Main Hand Placement", "RS_HandsMainPlacement"
+	Submenu "Off Hand Placement",  "RS_HandsOffPlacement"
+
+	StaticText " "
+	StaticText "How a hand sits on the weapon it is", gold
+	StaticText "gripping. By ROLE, not by weapon -- a", gold
+	StaticText "grip is a grip on every gun.", gold
+
+	StaticText " "
+	StaticText "The two hands are one mesh mirrored, so a", gold
+	StaticText "shared value moves them opposite ways.", gold
+	StaticText "Each hand has its own set.", gold
+
+	StaticText " "
+	StaticText "Diagnostics", gold
+	Option "Trace pose choice",   "rs_hands_debug",     "OnOff"
+	Option "Trace renderer path", "vr_pose_debug",      "OnOff"
+	Option "Force pose",          "rs_hands_forcepose", "RS_HandsPoseList"
+	Slider "Browse source anim",  "rs_hands_srcframe", -1, 1277, 1, 0
+
+	StaticText " "
+	StaticText ""
+	StaticText "WORLD-ACTOR HANDS -- the real architecture", 1
+	// The psprite hands above are drawn relative to your eye and can never grab,
+	// collide, or hold a world object. These ride the controllers through
+	// MDL_FOLLOWMAINHAND/OFFHAND at draw rate, same as the world gun.
+	Option "World hands",       "rs_handworld", "OnOff"
+
+	StaticText "  poses", 1
+	// The same twenty shapes the psprite hands use, now reachable on a world
+	// actor. Frames 0-10 are the baked hand shapes; 11-19 are the manipulation
+	// set, which lives at frames 1289-1297 and could not be addressed at all
+	// until model frames could be named by number.
+	Option "Force pose",        "rs_handworld_forcepose", "RS_HandsPoseList"
+	Slider "Blend tics",        "rs_handworld_blend", 1, 20, 1, 0
+	Option "Log pose changes",  "rs_handworld_debug", "OnOff"
+
+
+	// RANGE AND STEP ARE IN METRES, NOT MAP UNITS.
+	//
+	// These six used to read -60..60 in steps of 0.5, which was the map-unit
+	// range every other placement slider in this file uses. It is the wrong
+	// space for a FOLLOWED model: GetHandTransform bakes vr_vunits_per_meter
+	// into the matrix before MODELDEF Scale is reached, and step 4 of
+	// ObjectToWorldMatrix divides the offset back out by that same scale -- so
+	// the number here lands in world space one for one, in METRES.
+	//
+	// That made the old slider ~120 metres of travel in half-metre notches, with
+	// no usable setting anywhere in it: the first notch threw the hand across
+	// the room. A metre either way is already further than an arm reaches, and
+	// 0.01 is a centimetre, which is the resolution this actually needs.
+	//
+	// Same metres/map-units confusion that hid the world hands entirely (see the
+	// world-hand block in MODELDEF.txt). The rotation sliders below are degrees
+	// and were never affected.
+	StaticText "  main hand", 1
+	Slider "M Left / Right",   "rs_hw_main_ofs_x", -100.0, 100.0, 0.5, 1
+	Slider "M Forward / Back", "rs_hw_main_ofs_y", -100.0, 100.0, 0.5, 1
+	Slider "M Down / Up",      "rs_hw_main_ofs_z", -100.0, 100.0, 0.5, 1
+	Slider "M Yaw",            "rs_hw_main_yaw",  -180, 180, 1, 1
+	Slider "M Pitch",          "rs_hw_main_pitch",-180, 180, 1, 1
+	Slider "M Roll",           "rs_hw_main_roll", -180, 180, 1, 1
+	Slider "M Scale",          "rs_hw_main_scale", 0.05, 5.0, 0.05, 2
+
+	StaticText "  off hand", 1
+	Slider "O Left / Right",   "rs_hw_off_ofs_x", -100.0, 100.0, 0.5, 1
+	Slider "O Forward / Back", "rs_hw_off_ofs_y", -100.0, 100.0, 0.5, 1
+	Slider "O Down / Up",      "rs_hw_off_ofs_z", -100.0, 100.0, 0.5, 1
+	Slider "O Yaw",            "rs_hw_off_yaw",  -180, 180, 1, 1
+	Slider "O Pitch",          "rs_hw_off_pitch",-180, 180, 1, 1
+	Slider "O Roll",           "rs_hw_off_roll", -180, 180, 1, 1
+	Slider "O Scale",          "rs_hw_off_scale", 0.05, 5.0, 0.05, 2
+
+	SafeCommand "Reset world hands", "resetcvar rs_hw_main_ofs_x rs_hw_main_ofs_y rs_hw_main_ofs_z rs_hw_main_yaw rs_hw_main_pitch rs_hw_main_roll rs_hw_main_scale rs_hw_off_ofs_x rs_hw_off_ofs_y rs_hw_off_ofs_z rs_hw_off_yaw rs_hw_off_pitch rs_hw_off_roll rs_hw_off_scale"
+
+}
+
+// WHICH SPACE THE REACH NUMBERS ARE IN -- see CVARINFO. Two readings of the
+// same six cvars, both defensible from the source, only one of them true in a
+// headset. The names say what you would SEE, because that is the evidence the
+// person at the menu actually has.
+OptionValue "RS_GrabScaleSpace"
+{
+	0, "Map units (34 = 1m)"
+	1, "Drawn mesh (1 = 1m)"
+}
+
+// The engine's GRIPSUBJ_* numbers (constants.zs): 6 Forend, 7 Foregrip,
+// 9 Support. 0 and -1 are RS_Stabilize's own: archetype default, and never.
+OptionValue "RS_StabSubject"
+{
+	0,  "Archetype default"
+	6,  "Forend (pump / handguard)"
+	7,  "Foregrip (vertical handle)"
+	9,  "Support (wrapped round the firing hand)"
+	-1, "Never braced"
+}
+
+OptionValue "RS_StabGrip"
+{
+	1, "Tap to latch"
+	0, "Hold to keep"
+}
+
+// Named by the MOVEMENT, not by the joint, because the movement is what the
+// person choosing has to picture themselves doing in a chair.
+OptionValue "RS_DGrabFlickMode"
+{
+	0, "Pull hand back (shoulder)"
+	1, "Tip wrist up (seated)"
+}
+
+// Named so a forced pose reads as a hand shape rather than a frame number.
+OptionValue "RS_HandsPoseList"
+{
+	-1, "Controllers"
+	0,  "0 - Open"
+	1,  "1 - Grip (3-4-5)"
+	2,  "2 - Trigger (index)"
+	3,  "3 - Fist"
+	4,  "4 - Pinch"
+	5,  "5 - Thumb out"
+	6,  "6 - Grip + fire"
+	7,  "7 - Grip, thumb up"
+	8,  "8 - Finger on trigger"
+	9,  "9 - Finger on trigger, thumb up"
+	10, "10 - Fire, thumb up"
+	11, "11 - Hold a round"
+	12, "12 - Hold a shell"
+	13, "13 - Inserting"
+	14, "14 - Hold the slide"
+	15, "15 - Hold a magazine"
+	16, "16 - Hold a foregrip"
+	17, "17 - Hold the forend"
+	18, "18 - Reach"
+	19, "19 - Support (round the firing hand)"
+}
+
+OptionMenu "RS_HandsMainPlacement"
+{
+	Title "Main Hand"
+
+	StaticText ""
+	StaticText "Position", gold
+	Slider "Left / Right",   "vr_hand_ofs_x", -60, 60, 0.5, 2
+	Slider "Forward / Back", "vr_hand_ofs_y", -60, 60, 0.5, 2
+	Slider "Down / Up",      "vr_hand_ofs_z", -60, 60, 0.5, 2
+
+	StaticText " "
+	StaticText "Rotation", gold
+	Slider "Yaw",   "vr_hand_yaw",   -180, 180, 5, 1
+	Slider "Pitch", "vr_hand_pitch", -180, 180, 5, 1
+	Slider "Roll",  "vr_hand_roll",  -180, 180, 5, 1
+
+	StaticText " "
+	SafeCommand "Reset main hand", "resetcvar vr_hand_ofs_x vr_hand_ofs_y vr_hand_ofs_z vr_hand_yaw vr_hand_pitch vr_hand_roll"
+}
+
+OptionMenu "RS_HandsOffPlacement"
+{
+	Title "Off Hand"
+
+	StaticText ""
+	StaticText "Position", gold
+	Slider "Left / Right",   "vr_offhand_ofs_x", -60, 60, 0.5, 2
+	Slider "Forward / Back", "vr_offhand_ofs_y", -60, 60, 0.5, 2
+	Slider "Down / Up",      "vr_offhand_ofs_z", -60, 60, 0.5, 2
+
+	StaticText " "
+	StaticText "Rotation", gold
+	Slider "Yaw",   "vr_offhand_yaw",   -180, 180, 5, 1
+	Slider "Pitch", "vr_offhand_pitch", -180, 180, 5, 1
+	Slider "Roll",  "vr_offhand_roll",  -180, 180, 5, 1
+
+	StaticText " "
+	SafeCommand "Reset off hand", "resetcvar vr_offhand_ofs_x vr_offhand_ofs_y vr_offhand_ofs_z vr_offhand_yaw vr_offhand_pitch vr_offhand_roll"
+}
+
+
+
+
+
+// Hand grabbing gets its own Options entry. It is not a property of any weapon
+// -- it is how picking anything up works, and it is the thing most likely to be
+// tuned repeatedly.
+// Reached from the "Unified VR HUD and Interaction Options" hub at the top
+// of this file.
+
+OptionMenu "RS_GrabMenu"
+{
+	Title "Hand Grab"
+
+	StaticText ""
+	Option "Grabbing (master)",         "rs_grab", "OnOff"
+	StaticText ""
+	Submenu "Reach and aim",            "RS_GrabReachMenu"
+	Submenu "Holding",                  "RS_GrabHoldMenu"
+	Submenu "Distance grab",            "RS_GrabDistMenu"
+	Submenu "Flick and throw",          "RS_GrabThrowMenu"
+	Submenu "Using items",              "RS_GrabUseMenu"
+	Submenu "Feedback",                 "RS_GrabFeedMenu"
+	Submenu "What is grabbable",        "RS_GrabWhatMenu"
+}
+
+//======================================================================
+OptionMenu "RS_GrabReachMenu"
+{
+	Title "Reach and aim"
+
+	StaticText ""
+	StaticText "The oval IS the reach", 1
+	// Drawn from the same three cvars RS_Reach tests against, so the gauge
+	// cannot drift from the volume. The captions bind to the cvar that draws
+	// that axis, not to the letter in its name -- the engine decides which
+	// letter is which, and it says x is sideways.
+	StaticText "34 units = 1 metre.  A fist is about 2 units.", 1
+	StaticText "SIZE first, then the three axes for shape.", 1
+
+	StaticText ""
+	StaticText "If the oval looks right but nothing grabs --", 1
+	StaticText "or it grabs fine and the oval is metres wide --", 1
+	StaticText "this is the switch. Flip it and look again.", 1
+	Option "Sizes are in",              "rs_grab_scale_space", "RS_GrabScaleSpace"
+
+	StaticText "Main hand", 1
+	Slider "  OVERALL SIZE",   "rs_grab_m_scale", 0.005, 4.0, 0.005, 3
+	Slider "  Along fingers",  "rs_grab_m_scale_y", 0.2, 10, 0.1, 1
+	Slider "  Across palm",    "rs_grab_m_scale_x", 0.2, 10, 0.1, 1
+	Slider "  Through hand",   "rs_grab_m_scale_z", 0.2, 10, 0.1, 1
+	StaticText "Off hand", 1
+	Slider "  OVERALL SIZE",   "rs_grab_o_scale", 0.005, 4.0, 0.005, 3
+	Slider "  Along fingers",  "rs_grab_o_scale_y", 0.2, 10, 0.1, 1
+	Slider "  Across palm",    "rs_grab_o_scale_x", 0.2, 10, 0.1, 1
+	Slider "  Through hand",   "rs_grab_o_scale_z", 0.2, 10, 0.1, 1
+
+	StaticText ""
+	StaticText "Where it sits on the hand -- live", 1
+	StaticText "With world hands off, the reach centres on the", 1
+	StaticText "CONTROLLER, which is your wrist. Push it forward.", 1
+	Slider "M Forward / back", "rs_grab_m_ofs_y", -100.0, 100.0, 0.5, 1
+	Slider "M Left / right",   "rs_grab_m_ofs_x", -100.0, 100.0, 0.5, 1
+	Slider "M Down / up",      "rs_grab_m_ofs_z", -100.0, 100.0, 0.5, 1
+	Slider "O Forward / back", "rs_grab_o_ofs_y", -100.0, 100.0, 0.5, 1
+	Slider "O Left / right",   "rs_grab_o_ofs_x", -100.0, 100.0, 0.5, 1
+	Slider "O Down / up",      "rs_grab_o_ofs_z", -100.0, 100.0, 0.5, 1
+
+	// THE ROTATIONS WERE DECLARED AND HAD NO ROWS. The renderer reads
+	// <prefix>_yaw/_pitch/_roll for every PlacementCVars model whether a menu
+	// offers them or not, so these existed and were simply unreachable -- and an
+	// oval is only a sphere until its three semi-axes differ, at which point
+	// turning it is the difference between bracing along the barrel and across
+	// it.
+	StaticText ""
+	StaticText "How it is turned", 1
+	Slider "M Yaw",   "rs_grab_m_yaw",   -180, 180, 1, 0
+	Slider "M Pitch", "rs_grab_m_pitch", -180, 180, 1, 0
+	Slider "M Roll",  "rs_grab_m_roll",  -180, 180, 1, 0
+	Slider "O Yaw",   "rs_grab_o_yaw",   -180, 180, 1, 0
+	Slider "O Pitch", "rs_grab_o_pitch", -180, 180, 1, 0
+	Slider "O Roll",  "rs_grab_o_roll",  -180, 180, 1, 0
+
+	StaticText ""
+	SafeCommand "Reset", "resetcvar rs_grab_scale_space rs_grab_m_ofs_x rs_grab_m_ofs_y rs_grab_m_ofs_z rs_grab_m_yaw rs_grab_m_pitch rs_grab_m_roll rs_grab_m_scale rs_grab_m_scale_x rs_grab_m_scale_y rs_grab_m_scale_z rs_grab_o_ofs_x rs_grab_o_ofs_y rs_grab_o_ofs_z rs_grab_o_yaw rs_grab_o_pitch rs_grab_o_roll rs_grab_o_scale rs_grab_o_scale_x rs_grab_o_scale_y rs_grab_o_scale_z"
+}
+
+//======================================================================
+OptionMenu "RS_StabMenu"
+{
+	Title "Two-hand stabilize"
+	StaticText " "
+
+	StaticText "Bracing", "Gold"
+	Option "Two-hand stabilize",              "rs_stab", "OnOff"
+	Option "Draw the support point",          "rs_stab_viz", "OnOff"
+	Option "The off grip is",                 "rs_stab_latch", "RS_StabGrip"
+	Option "Main grip held too, where a swap is possible", "rs_stab_need_main_grip", "OnOff"
+	StaticText "Only where the two hand ovals overlap, as on a pistol:", "DarkGray"
+	StaticText "gripping your gun means nobody takes it. On a rifle the", "DarkGray"
+	StaticText "off hand alone braces.", "DarkGray"
+	Option "Buzz when it takes",              "rs_stab_haptic", "OnOff"
+	Slider "Palm must be this far in (1 = inside)", "rs_stab_depth", 0.5, 4.0, 0.05, 2
+	Slider "Pull away this far to let go",    "rs_stab_break", 1.0, 6.0, 0.1, 1
+	StaticText " "
+
+	// The engine's option, referenced rather than owned -- see the note on
+	// vr_holster_use_grip in RS_HolsterTiming. A brace publishes the hold; this
+	// is the switch that makes the aim follow it.
+	StaticText "The engine", "Gold"
+	Option "Aim follows both hands (engine)",  "vr_two_handed_weapons", "OnOff"
+	StaticText "Same switch as Options > VR Controls > Two Handed Weapons.", "DarkGray"
+	StaticText " "
+
+	// EDITS THE GUN IN YOUR MAIN HAND. These sliders are filled from that
+	// weapon model's own record when it comes up and written back to it when
+	// they move -- see rs_stabilize.zs. Open this menu with the gun raised and
+	// the oval drawn: it moves as you drag.
+	StaticText "THE WEAPON IN YOUR MAIN HAND", "Gold"
+	StaticText "Sliders edit the model you are holding right now.", "DarkGray"
+	StaticText "The drawn oval follows them live. Saved per weapon model.", "DarkGray"
+	Option "Off hand holds it as",            "rs_stab_subject", "RS_StabSubject"
+	Slider "  OVERALL SIZE",                  "rs_stab_scale", 0.005, 4.0, 0.005, 3
+	Slider "  Along the barrel",              "rs_stab_scale_y", 0.2, 10, 0.1, 1
+	Slider "  Across",                        "rs_stab_scale_x", 0.2, 10, 0.1, 1
+	Slider "  Up and down",                   "rs_stab_scale_z", 0.2, 10, 0.1, 1
+	Slider "Forward / back",                  "rs_stab_ofs_y", -100.0, 100.0, 0.5, 1
+	Slider "Left / right",                    "rs_stab_ofs_x", -100.0, 100.0, 0.5, 1
+	Slider "Down / up",                       "rs_stab_ofs_z", -100.0, 100.0, 0.5, 1
+	StaticText "How it is turned -- declared all along, never on a row", "DarkGray"
+	Slider "Yaw",                             "rs_stab_yaw",   -180, 180, 1, 0
+	Slider "Pitch",                           "rs_stab_pitch", -180, 180, 1, 0
+	Slider "Roll",                            "rs_stab_roll",  -180, 180, 1, 0
+	StaticText "Units and space match the hand ovals (Reach and aim).", "DarkGray"
+	StaticText " "
+	SafeCommand "Print this weapon's numbers to the console", "netevent rs-stab-print"
+	SafeCommand "Reset THIS weapon to its archetype",        "netevent rs-stab-reset-weapon"
+	SafeCommand "Reset EVERY weapon model",                  "netevent rs-stab-reset-all"
+	StaticText " "
+	Option "Debug readout ([RSSTAB])",         "rs_stab_debug", "OnOff"
+}
+
+OptionMenu "RS_GrabHoldMenu"
+{
+	Title "Holding"
+
+	StaticText ""
+	StaticText "A grabbed thing stays in your hand instead of", 1
+	StaticText "going straight into inventory.", 1
+	Option "Squeeze toggles",           "rs_hold_toggle",  "OnOff"
+	Option "Second hand can join",      "rs_hold_twohand", "OnOff"
+	Option "Second hand can take",      "rs_hold_pass",    "OnOff"
+
+	StaticText ""
+	StaticText "How far it may lag behind the palm before", 1
+	StaticText "your hand loses it. 34 units = 1 metre.", 1
+	Slider "Let go at",                 "rs_hold_break", 0, 120, 2, 0
+	Option "Turn with wrist",           "rs_hold_rotate", "OnOff"
+	Slider "Weight feedback",           "rs_hold_haptic", 0, 1.5, 0.05, 2
+
+	StaticText ""
+	StaticText "Put your palms together and squeeze to take the", 1
+	StaticText "other hand's weapon. The hand you squeeze is the", 1
+	StaticText "hand doing the taking.", 1
+	Option "Swap by touching hands",    "rs_swap_overlap", "OnOff"
+	Slider "  Overlap needed",          "rs_swap_overlap_depth", 0.5, 2.5, 0.1, 1
+	StaticText "2.0 = the ovals meet. Lower is tighter; 1.0 is", "DarkGray"
+	StaticText "palm-on-palm and hard to hit on purpose.", "DarkGray"
+	StaticText ""
+	StaticText "With a voxel pack loaded, a held object becomes", 1
+	StaticText "a solid voxel you can actually turn over, then", 1
+	StaticText "goes back to a sprite when you drop it.", 1
+	StaticText "World voxels live under Mod Options -> Voxel", 1
+	StaticText "Options. Turning them OFF there is the good", 1
+	StaticText "setting: the world stays flat and only what you", 1
+	StaticText "reach for goes solid.", 1
+	StaticText ""
+	StaticText "Held: while it is in your hand.", 1
+	Option "Voxel when held",           "rs_hold_voxel", "OnOff"
+	StaticText "Only for things a loaded voxel pack has a voxel for.", "DarkGray"
+	StaticText "Without one, a held thing stays exactly as it looks.", "DarkGray"
+	StaticText "Grabbed: the whole gesture instead -- from the", 1
+	StaticText "moment you lock on, through the flight and the", 1
+	StaticText "catch, so it never pops mid-gesture.", 1
+	Option "Voxel when grabbed",        "rs_grab_voxel", "OnOff"
+	StaticText ""
+	StaticText "Walking into a pickup collects it long before", 1
+	StaticText "your hand gets near it. On = you must reach.", 1
+	Option "Must reach for pickups",    "rs_grab_nowalkover", "OnOff"
+}
+
+//======================================================================
+OptionMenu "RS_GrabDistMenu"
+{
+	Title "Distance grab"
+
+	StaticText ""
+	StaticText "Point and squeeze. Only used when your palm", 1
+	StaticText "is empty -- something you are touching wins.", 1
+	Option "Distance grabbing",         "rs_dgrab", "OnOff"
+
+	StaticText ""
+	StaticText "Reach and spread are separate on purpose: how", 1
+	StaticText "FAR and how PRECISELY are different questions.", 1
+	Slider "  How far (34 = 1m)",       "rs_dgrab_reach",  34, 2048, 17, 0
+	Slider "  How tight to point",      "rs_dgrab_spread", 1, 45, 0.5, 1
+	Option "  Needs line of sight",     "rs_dgrab_sight", "OnOff"
+
+	StaticText ""
+	StaticText "Speed, not duration -- flight time comes from", 1
+	StaticText "the distance, so near and far arrive alike.", 1
+	Slider "  Speed (m/s)",             "rs_dgrab_speed",  2, 60, 1, 0
+	Slider "  Never quicker than",      "rs_dgrab_time_min", 1, 30, 1, 0
+	Slider "  Never slower than",       "rs_dgrab_time_max", 10, 140, 5, 0
+
+	StaticText ""
+	StaticText "1 = constant speed. Higher starts slow and", 1
+	StaticText "speeds up, which is what a PULL feels like.", 1
+	Slider "  Acceleration",            "rs_dgrab_accel",  1, 4, 0.1, 1
+
+	StaticText ""
+	StaticText "Arc height as a fraction of the distance, so", 1
+	StaticText "the shape holds at every range.", 1
+	Slider "  Arc height",              "rs_dgrab_arc",    0, 0.6, 0.01, 2
+
+	StaticText ""
+	StaticText "Turns end over end over the whole flight, so", 1
+	StaticText "near and far tumble alike. Whole numbers land", 1
+	StaticText "square; 0 is off. A barrel wants about 2.", 1
+	Slider "  Tumble in flight",        "rs_dgrab_tumble", 0, 6, 0.5, 1
+
+}
+
+//======================================================================
+OptionMenu "RS_GrabThrowMenu"
+{
+	Title "Flick and throw"
+
+	StaticText ""
+	StaticText "Open your hand at something locked and it comes", 1
+	StaticText "-- no button. Tipping the wrist is the seated", 1
+	StaticText "gesture: it needs no shoulder, so it works with", 1
+	StaticText "your elbow resting on an armrest.", 1
+	Option "Flick to pull",             "rs_dgrab_flick", "OnOff"
+	Option "  Gesture",                 "rs_dgrab_flick_mode", "RS_DGrabFlickMode"
+	Slider "  Wrist speed (deg/tic)",   "rs_flick_pitch", 1.0, 20, 0.5, 1
+	Slider "  Hand speed (m/s)",        "rs_flick_speed", 0.5, 8, 0.1, 1
+
+	StaticText ""
+	StaticText "Letting go and throwing are the same act. Speed", 1
+	StaticText "is the PEAK of the last 180ms, not the instant", 1
+	StaticText "of release -- your arm is already slowing by then.", 1
+	Option "Throwing",                  "rs_throw", "OnOff"
+	StaticText ""
+	StaticText "Arm strength. 1.0 throws as hard as you actually", 1
+	StaticText "threw; higher is the Doom marine doing it for you.", 1
+	StaticText "Your own movement is added AFTER this, so running", 1
+	StaticText "does not get multiplied.", 1
+	Slider "  Throw strength",          "rs_throw_scale", 0.1, 10, 0.1, 1
+	Slider "  Off-hand throw strength", "rs_throw_scale_off", 0.1, 4, 0.1, 1
+	StaticText "On top of the strength above, off hand only. Most", "DarkGray"
+	StaticText "people's off arm has less snap than their main --", "DarkGray"
+	StaticText "raise this if it feels short rather than blaming aim.", "DarkGray"
+	Slider "  Drop below (m/s)",        "rs_throw_min", 0, 5, 0.1, 1
+	StaticText "Slower than this and opening your hand drops the", "DarkGray"
+	StaticText "object instead of throwing it.", "DarkGray"
+	StaticText ""
+	Slider "  Arc",                     "rs_throw_lift", 0.0, 1.0, 0.05, 2
+	StaticText "Lift added in proportion to how hard you threw, so a", "DarkGray"
+	StaticText "hard throw lobs and a gentle one does not. 0 is flat.", "DarkGray"
+	StaticText ""
+	Option "  Spin from your wrist",    "rs_throw_spin", "OnOff"
+	Slider "  Spin strength",           "rs_throw_spin_scale", 0.0, 4.0, 0.1, 1
+	StaticText "How much of your wrist's turn the object keeps.", "DarkGray"
+	StaticText ""
+	StaticText "How the throw is read off your arm", 1
+	Slider "  Aim smoothing",           "rs_throw_aim", 1, 6, 1, 0
+	StaticText "Samples averaged for the DIRECTION. Speed comes from", "DarkGray"
+	StaticText "your fastest instant; aim comes from where your hand", "DarkGray"
+	StaticText "was going as you released. Higher is smoother, but", "DarkGray"
+	StaticText "too high averages in the arc before you committed.", "DarkGray"
+	Slider "  Release window (tics)",   "rs_throw_grace", 1, 7, 1, 0
+	StaticText "How recently the fast part must have happened for it", "DarkGray"
+	StaticText "to count as this throw rather than an older motion.", "DarkGray"
+}
+
+//======================================================================
+OptionMenu "RS_GrabUseMenu"
+{
+	Title "Using items"
+
+	StaticText ""
+	StaticText "Bring a held item to your face to use it.", 1
+	StaticText "Not your body -- a held thing is already inside", 1
+	StaticText "your own collision cylinder.", 1
+	Option "Use at face",               "rs_use_at_face", "OnOff"
+	Slider "  How close (34 = 1m)",     "rs_use_face_reach", 4, 40, 1, 0
+
+	StaticText ""
+	StaticText "A box you DON'T catch lands at your feet and", 1
+	StaticText "is picked up anyway -- so catching one should", 1
+	StaticText "mean you wanted to keep it. Carry it to your", 1
+	StaticText "chest pouch to put it away.", 1
+	StaticText "Off: caught ammo resolves instantly instead.", 1
+	Option "Stow caught ammo in pouch",  "rs_use_ammo_pouch", "OnOff"
+}
+
+//======================================================================
+OptionMenu "RS_GrabFeedMenu"
+{
+	Title "Feedback"
+
+	StaticText ""
+	StaticText "considered = neutral / orange", 1
+	StaticText "in your hand = orange / green", 1
+	StaticText "ready to use at your face = green / cyan", 1
+	Option "Flash the target",          "rs_grab_lightup", "OnOff"
+	Slider "  Flash speed (tics)",      "rs_grab_flash", 4, 70, 2, 0
+
+	StaticText ""
+	Submenu "The aiming ray",           "RS_GrabRayMenu"
+
+	StaticText ""
+	StaticText "HAPTICS HAVE NEVER BEEN PROVEN IN THIS BUILD.", 1
+	StaticText "Turn on vr_haptic_debug and read [HAPTIC]:", 1
+	StaticText "nothing printed = the call never left.", 1
+	Option "Tick at face range",        "rs_use_face_haptic", "OnOff"
+	Slider "  Strength",                "rs_use_face_haptic_amp", 0.05, 1.0, 0.05, 2
+
+	StaticText ""
+	StaticText "Gauges. The drawn volume IS the tested volume.", 1
+	Option "Show the reach volume",     "rs_grabviz", "OnOff"
+	Option "Only when something is in", "rs_grabviz_onlywhenhot", "OnOff"
+	Option "Show what it is on",        "rs_volviz", "OnOff"
+	Slider "Opacity",                   "rs_grabviz_alpha", 0.05, 1.0, 0.05, 2
+
+	StaticText ""
+	StaticText "The face sphere sits where you cannot look at", 1
+	StaticText "it. For dialling the number, then switch it off.", 1
+	Option "Show the face volume",      "rs_use_face_viz", "OnOff"
+
+	StaticText ""
+	Option "Log holding and grabbing",  "rs_hand_debug",   "OnOff"
+	Option "Log weapon slot and carry", "rs_hand_trace",   "OnOff"
+}
+
+//======================================================================
+//======================================================================
+OptionMenu "RS_GrabRayMenu"
+{
+	Title "The aiming ray"
+
+	StaticText ""
+	Option "Draw the ray at all",       "rs_dgrab_beam", "OnOff"
+	Slider "Edge softness",             "rs_beam_soft", 0, 1, 0.05, 2
+
+	StaticText ""
+	StaticText "IDLE -- pointing at nothing.", 1
+	StaticText "Off is a real choice: a permanent line in your", 1
+	StaticText "vision may be worse than the aiming it solves.", 1
+	Option "  Draw when idle",          "rs_beam_idle_show", "OnOff"
+	ColorPicker "  Colour",             "rs_beam_idle_color"
+	Slider "  Opacity",                 "rs_beam_idle_alpha", 0, 1, 0.05, 2
+	Slider "  Thickness",               "rs_beam_idle_thick", 0.05, 4, 0.05, 2
+	StaticText "0 = as far as you could actually pull from.", 1
+	Slider "  Length",                  "rs_beam_idle_len", 0, 2048, 32, 0
+
+	StaticText ""
+	StaticText "CANDIDATE -- something grabbable under it.", 1
+	ColorPicker "  Colour",             "rs_beam_hot_color"
+	Slider "  Opacity",                 "rs_beam_hot_alpha", 0, 1, 0.05, 2
+	Slider "  Thickness",               "rs_beam_hot_thick", 0.05, 4, 0.05, 2
+
+	StaticText ""
+	StaticText "LOCKED -- your fist is closed on it.", 1
+	ColorPicker "  Colour",             "rs_beam_lock_color"
+	Slider "  Opacity",                 "rs_beam_lock_alpha", 0, 1, 0.05, 2
+	Slider "  Thickness",               "rs_beam_lock_thick", 0.05, 4, 0.05, 2
+	StaticText "Drawn from the OBJECT to your hand, so the pulse,", 1
+	StaticText "the taper and the flare all run toward you.", 1
+	Option "  Reel the pulse inward",   "rs_dgrab_beam_reel", "OnOff"
+
+	StaticText ""
+	StaticText "THE LINE ITSELF. Level-wide -- these govern every", 1
+	StaticText "beam in the level, not just this one.", 1
+	StaticText "Everything directional runs start to end.", 1
+	Slider "Pulse speed",               "rs_beam_scroll",  0, 30, 0.5, 1
+	Slider "Pulse depth",               "rs_beam_depth",   0, 1, 0.05, 2
+	Slider "Glow in the air",           "rs_beam_airglow", 0, 3, 0.1, 1
+	Slider "Taper",                     "rs_beam_taper",   0, 1, 0.05, 2
+	Slider "Flare at the end",          "rs_beam_flare",   0, 5, 0.1, 1
+	Slider "Halo",                      "rs_beam_glow",    0, 2, 0.05, 2
+	Slider "Catches in fog",            "rs_beam_fog",     0, 2, 0.05, 2
+
+	StaticText ""
+	SafeCommand "Reset the ray", "resetcvar rs_beam_soft rs_beam_idle_show rs_beam_idle_color rs_beam_idle_alpha rs_beam_idle_thick rs_beam_idle_len rs_beam_hot_color rs_beam_hot_alpha rs_beam_hot_thick rs_beam_lock_color rs_beam_lock_alpha rs_beam_lock_thick rs_dgrab_beam_reel rs_beam_airglow rs_beam_scroll rs_beam_depth rs_beam_taper rs_beam_flare rs_beam_glow rs_beam_fog"
+}
+
+OptionMenu "RS_GrabWhatMenu"
+{
+	Title "What is grabbable"
+
+	StaticText ""
+	StaticText "The full table is in rs_grabpolicy.zs. These are", 1
+	StaticText "the answers worth changing mid-session.", 1
+	Option "Barrels",                   "rs_grab_barrels", "OnOff"
+	Option "Corpses",                   "rs_grab_corpses", "OnOff"
+	Option "Weapons on the floor",      "rs_grab_weapons", "OnOff"
+
+	StaticText ""
+	StaticText "A LIVE monster is never grabbable and has no", 1
+	StaticText "switch. Closing a hand on one is a way of", 1
+	StaticText "deleting monsters, not an interaction.", 1
+}
