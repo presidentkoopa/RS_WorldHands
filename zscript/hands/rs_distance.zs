@@ -297,7 +297,8 @@ class RS_Pull : EventHandler
 
 		// Voxel from the moment it is yours. Free on anything without one --
 		// the engine falls through to the ordinary sprite path.
-		lockSavedVoxel[hand] = a.VoxelOverride;
+		let heldSys = RS_Held.Get();
+		lockSavedVoxel[hand] = heldSys ? heldSys.TakeThrownVoxel(a, a.VoxelOverride) : a.VoxelOverride;
 		if (RS_Reach.Flag("rs_grab_voxel", p, true)) a.VoxelOverride = true;
 
 		lockActor[hand] = a;

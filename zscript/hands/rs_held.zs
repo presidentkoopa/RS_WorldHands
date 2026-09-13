@@ -216,6 +216,77 @@ class RS_Held : EventHandler
 
 	// ---- access ----------------------------------------------------------
 
+	// ---- thrown voxels -----------------------------------------------------
+	//
+	// A THROWN VOXEL STAYS A VOXEL UNTIL IT SETTLES. With r_voxels_mode "held & grabbed
+	// only" (auto whenever a voxel pack is loaded), VoxelOverride is the only thing
+	// that keeps an object drawn as its voxel. Release used to hand the pre-grab value
+	// straight back, so a barrel thrown from the hand popped into its sprite the
+	// instant it left the fingers. It now keeps the voxel through the flight and
+	// gets its own value back once it has come to rest on the floor (or after ten
+	// seconds, whichever is first). RS_Pull flights already do this themselves.
+	//
+	// Render state only: no RNG, nothing the playsim reads.
+	Array<Actor> thrownVoxel;
+	Array<bool>  thrownVoxelSaved;
+	Array<int>   thrownVoxelTics;
+
+	void KeepVoxelInFlight(Actor a, bool savedVoxel)
+	{
+		if (!a) return;
+		a.VoxelOverride = true;
+		int i = thrownVoxel.Find(a);
+		if (i < thrownVoxel.Size()) { thrownVoxelTics[i] = 0; return; }
+		thrownVoxel.Push(a);
+		thrownVoxelSaved.Push(savedVoxel);
+		thrownVoxelTics.Push(0);
+	}
+
+	// A GRAB OF SOMETHING STILL IN FLIGHT inherits the value it had before the throw,
+	// not the one the flight imposed -- otherwise it would come out of the next hold
+	// as a voxel for good. Returns `current` for anything that was not thrown.
+	bool TakeThrownVoxel(Actor a, bool current)
+	{
+		int i = thrownVoxel.Find(a);
+		if (!a || i >= thrownVoxel.Size()) return current;
+		bool saved = thrownVoxelSaved[i];
+		thrownVoxel.Delete(i);
+		thrownVoxelSaved.Delete(i);
+		thrownVoxelTics.Delete(i);
+		return saved;
+	}
+
+	private void TickThrownVoxels()
+	{
+		for (int i = thrownVoxel.Size() - 1; i >= 0; i--)
+		{
+			Actor a = thrownVoxel[i];
+			bool settled = false;
+			if (a)
+			{
+				thrownVoxelTics[i]++;
+				bool resting = (a.Pos.z <= a.floorz + 1.0) && (a.Vel.Length() < 1.0);
+				// A tic of lift-off right after the throw is not a landing: require it to
+				// have been in the air, or be at rest for good, or run out of time.
+				settled = (resting && thrownVoxelTics[i] > 4) || thrownVoxelTics[i] > 350;
+				if (settled) a.VoxelOverride = thrownVoxelSaved[i];
+			}
+			if (!a || settled)
+			{
+				thrownVoxel.Delete(i);
+				thrownVoxelSaved.Delete(i);
+				thrownVoxelTics.Delete(i);
+			}
+		}
+	}
+
+	private void ForgetThrownVoxels()
+	{
+		thrownVoxel.Clear();
+		thrownVoxelSaved.Clear();
+		thrownVoxelTics.Clear();
+	}
+
 	static RS_Held Get()
 	{
 		return RS_Held(EventHandler.Find("RS_Held"));
@@ -413,6 +484,10 @@ class RS_Held : EventHandler
 			}
 		}
 
+		// A THROWN VOXEL STAYS A VOXEL IN FLIGHT (see KeepVoxelInFlight). Read before
+		// RestoreFlags puts the pre-grab value back and ClearSlot wipes the backup.
+		bool drawnAsVoxel = a.VoxelOverride;
+		bool voxelBeforeGrab = hSavedVoxel[hand];
 		RestoreFlags(hand, a);
 		ClearSlot(hand);
 
@@ -427,6 +502,7 @@ class RS_Held : EventHandler
 				// ClearSlot has already zeroed the backup -- reading it here
 				// would be reading state this method just wiped.
 				a.Vel = v;
+				if (drawnAsVoxel) KeepVoxelInFlight(a, voxelBeforeGrab);
 				let sw = RS_Swing.Get();
 				if (sw) sw.Forget(hand);
 				if (Flag("rs_hand_debug", p, true))
@@ -490,7 +566,7 @@ class RS_Held : EventHandler
 		hSavedRoll[hand]       = a.Roll;
 		hSavedPitch[hand]      = a.Pitch;
 		hSavedAngle[hand]      = a.Angle;
-		hSavedVoxel[hand]      = a.VoxelOverride;
+		hSavedVoxel[hand]      = TakeThrownVoxel(a, a.VoxelOverride);
 		hFollowScaled[hand]    = false;
 
 		// SPECIAL cleared is the one that is not optional. An item in your hand
@@ -1004,6 +1080,7 @@ class RS_Held : EventHandler
 
 	override void WorldTick()
 	{
+		TickThrownVoxels();
 		let p = players[consoleplayer];
 		if (!p || !p.mo) { return; }
 		let pmo = p.mo;
@@ -1239,6 +1316,7 @@ class RS_Held : EventHandler
 	override void WorldLoaded(WorldEvent e)
 	{
 		ReleaseAll();
+		ForgetThrownVoxels();
 	}
 
 	override void WorldUnloaded(WorldEvent e)
@@ -1250,6 +1328,7 @@ class RS_Held : EventHandler
 		// left that hand reading as closed on an object for the whole of
 		// the following map.
 		ReleaseAll();
+		ForgetThrownVoxels();
 		let p = players[consoleplayer];
 		if (p && p.mo) ClearClaims(p.mo);
 	}
