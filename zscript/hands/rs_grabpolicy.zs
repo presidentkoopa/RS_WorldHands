@@ -139,6 +139,67 @@ class RS_GrabPolicy : EventHandler
 		return a;
 	}
 
+	// WHAT THE HANDS DID WITH A THING, TOLD TO WHOEVER ASKED TO HEAR.
+	//
+	// The mod that owns what a thing is FOR may need to follow it through a pull -- to
+	// dress it differently while it flies, or to decide what a miss becomes -- and
+	// nothing else here can tell it. Every Service whose name contains
+	// "GrabEventService" is told GetInt("grab.event", stringArg = the event,
+	// intArg = hand, doubleArg = 1 when the thing came out of the air and 0 when it came
+	// off the floor, objectArg = the thing, nameArg 'RS_WorldHands'). The answer is
+	// ignored: an event is news, not a question, and nothing a listener says changes what
+	// the hands do. With no such Service loaded the lookup finds nothing, and every grab,
+	// lock, flight and catch behaves exactly as it did before this existed.
+	//
+	//   pull.lock      a distant thing was taken hold of where it stands
+	//   pull.unlock    a lock ended without a launch -- let go, out of range, hand filled
+	//   pull.start     it was flicked and is flying to the hand
+	//   pull.caught    the hand took it out of the air, held or used up on the way in
+	//                  (objectArg is null when a GrabTakeService used it up and removed it)
+	//   pull.refused   the hand closed on it and could not take it; it keeps flying
+	//   pull.missed    the arc ran out with the hand never closed; it drops where it is
+	//   pull.blocked   it hit geometry on the way over; it drops there
+	//   pull.aborted   the pull was called off -- grab switched off, the player died, the
+	//                  level changed, or a GrabBecomeService swapped in something ungrabbable
+	//
+	// Told on the machine running the hands, from the same tic the hands decided on, like
+	// everything else in this family.
+	static void Tell(String what, int hand, Actor a, bool fromAir = false)
+	{
+		let it = ServiceIterator.Find("GrabEventService");
+		Service s;
+		while (s = it.Next())
+			s.GetInt("grab.event", what, hand, fromAir ? 1.0 : 0.0, a, 'RS_WorldHands');
+	}
+
+	// A HAND MAY USE A THING UP INSTEAD OF HOLDING IT.
+	//
+	// OnTake below is the family's own answer for ammo, health, armour and weapons. A mod
+	// whose things mean something else when a hand takes them -- used on the catch, not on
+	// a floor grab, say -- answers here, first. Every Service whose name contains
+	// "GrabTakeService" is asked GetInt("grab.take", intArg = hand, doubleArg = 1 when the
+	// thing was caught out of the air and 0 when it was taken off the floor, objectArg =
+	// the thing, nameArg 'RS_WorldHands'). 1 means that Service used it up -- it has done
+	// whatever using it means, removing the thing included -- and the hand holds nothing.
+	// Anything else leaves it to OnTake and the hold, exactly as before. The first 1 wins.
+	//
+	// Asked at the same two doors as OnTake (a grab off the floor, a catch out of the air),
+	// after the grab rules have allowed the thing, so it is only ever asked about what a
+	// hand could actually take. With no such Service loaded nothing answers, and OnTake
+	// decides every take exactly as it always has.
+	static bool AskTake(int hand, Actor a, bool fromAir)
+	{
+		if (!a) return false;
+		let it = ServiceIterator.Find("GrabTakeService");
+		Service s;
+		while (s = it.Next())
+		{
+			if (s.GetInt("grab.take", "", hand, fromAir ? 1.0 : 0.0, a, 'RS_WorldHands') == 1)
+				return true;
+		}
+		return false;
+	}
+
 	// INHERITANCE-AWARE, which is the whole reason this is not a name compare.
 	//
 	// A rule written for Ammo has to cover every shell box in every mod that

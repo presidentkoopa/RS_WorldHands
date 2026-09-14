@@ -304,6 +304,7 @@ class RS_Pull : EventHandler
 		lockActor[hand] = a;
 		if (RS_Reach.Flag("rs_hand_debug", p, true))
 			Console.Printf("[RSPULL] hand %d LOCKED %s -- flick to pull it", hand, a.GetClassName());
+		RS_GrabPolicy.Tell("pull.lock", hand, a);
 		return true;
 	}
 
@@ -319,6 +320,9 @@ class RS_Pull : EventHandler
 		if (lockActor[hand]) lockActor[hand].VoxelOverride = lockSavedVoxel[hand];
 		lockSavedVoxel[hand] = false;
 
+		// Told last, with the thing back as it was found -- a launch never comes this way (Start
+		// takes the lock itself), so this is only ever a lock that ended.
+		if (lockActor[hand]) RS_GrabPolicy.Tell("pull.unlock", hand, lockActor[hand]);
 		lockActor[hand] = null;
 	}
 
@@ -669,6 +673,7 @@ class RS_Pull : EventHandler
 				a.bDROPPED ? 1 : 0, a.Pos.z - a.floorz,
 				a.bSPECIAL ? 1 : 0, a.bNOGRAVITY ? 1 : 0);
 
+		RS_GrabPolicy.Tell("pull.start", hand, a);
 		return true;
 	}
 
@@ -714,16 +719,19 @@ class RS_Pull : EventHandler
 			{
 				flyActor[hand] = null;
 				flyHold[hand]  = 0;
+				RS_GrabPolicy.Tell("pull.aborted", hand, a, true);
 				return false;
 			}
 		}
 
 		// Consumed on the way in -- a weapon that equipped, or a third copy that
-		// became ammo. There is nothing left to hold.
-		if (pol.OnTake(hand, a, rule, pmo, p, true))   // fromAir: this is the catch
+		// became ammo. There is nothing left to hold. A mod's GrabTakeService is
+		// asked first (RS_GrabPolicy.AskTake); with none loaded OnTake decides, as before.
+		if (RS_GrabPolicy.AskTake(hand, a, true) || pol.OnTake(hand, a, rule, pmo, p, true))   // fromAir: this is the catch
 		{
 			flyActor[hand] = null;
 			flyHold[hand]  = 0;
+			RS_GrabPolicy.Tell("pull.caught", hand, a, true);
 			return true;
 		}
 
@@ -740,6 +748,7 @@ class RS_Pull : EventHandler
 			// the saved value and the progress, so the next tic puts it back
 			// where the arc says it should be.
 			ArmTumble(hand, a);
+			RS_GrabPolicy.Tell("pull.refused", hand, a, true);
 			return false;
 		}
 
@@ -747,6 +756,7 @@ class RS_Pull : EventHandler
 		flyHold[hand]  = 0;
 		if (RS_Reach.Flag("rs_hand_debug", p, true))
 			Console.Printf("[RSPULL] hand %d CAUGHT %s (%s)", hand, a.GetClassName(), rule.why);
+		RS_GrabPolicy.Tell("pull.caught", hand, a, true);
 		return true;
 	}
 
@@ -768,7 +778,9 @@ class RS_Pull : EventHandler
 
 	// Put the object back the way it was found and forget it. Not a drop and not
 	// a catch -- this is the path for a pull that cannot finish.
-	private void Abort(int hand)
+	// why: the event a GrabEventService is told -- pull.blocked from the flight, pull.aborted
+	// from everything else (RS_GrabPolicy.Tell).
+	private void Abort(int hand, String why = "pull.aborted")
 	{
 		Actor a = flyActor[hand];
 		if (a)
@@ -782,6 +794,7 @@ class RS_Pull : EventHandler
 		}
 		flyActor[hand] = null;
 		flyHold[hand]  = 0;
+		if (a) RS_GrabPolicy.Tell(why, hand, a, true);
 	}
 
 	void AbortAll()
@@ -996,7 +1009,7 @@ class RS_Pull : EventHandler
 						a.Pos.x, a.Pos.y, a.Pos.z,
 						flyZ, a.Pos.z, a.floorz, a.ceilingz,
 						(flyZ < lo || flyZ > hi) ? 1 : 0);
-				Abort(h);
+				Abort(h, "pull.blocked");
 				continue;
 			}
 
@@ -1107,6 +1120,7 @@ class RS_Pull : EventHandler
 		// completely ordinary Doom actor from here -- gravity included, which
 		// is what carries it down to your feet from the palm it was flying to.
 		if (dbg) Console.Printf("[RSPULL] %s arrived uncaught -- dropped", a.GetClassName());
+		RS_GrabPolicy.Tell("pull.missed", h, a, true);
 	}
 
 	override void WorldLoaded(WorldEvent e) { AbortAll(); }

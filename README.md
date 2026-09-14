@@ -135,3 +135,18 @@ named at compile time in either direction:
   from a weapon's archetype record.
 - `RS_GripArbiterService` — ships **here**, and is also consumed by
   `RS_Holsters.zs` and `rr_sequence.zs` in whatever package those live in.
+
+**Asked of any mod that ships one** (every Service whose class name contains the
+string; with none loaded, the hands behave exactly as if the question did not exist —
+all three live beside each other in `rs_grabpolicy.zs`):
+
+- `GrabBecomeService` — `GetObject("grab.become", hand, thing)`: hand back a
+  different actor to be taken in the thing's place (`RS_GrabPolicy.Become`).
+- `GrabTakeService` — `GetInt("grab.take", intArg hand, doubleArg 1 caught / 0 off
+  the floor, objectArg thing)`: answer 1 to use the thing up instead of holding it,
+  asked before the built-in ammo/health/weapon rules at both a floor grab and a catch
+  (`RS_GrabPolicy.AskTake`).
+- `GrabEventService` — `GetInt("grab.event", stringArg event, intArg hand, doubleArg
+  1 from the air / 0 off the floor, objectArg thing)`, answer ignored:
+  `pull.lock`, `pull.unlock`, `pull.start`, `pull.caught`, `pull.refused`,
+  `pull.missed`, `pull.blocked`, `pull.aborted` (`RS_GrabPolicy.Tell`).

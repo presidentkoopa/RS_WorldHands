@@ -1616,8 +1616,10 @@ class RS_GrabHandler : EventHandler
 
             // Some things resolve instead of being held -- a weapon that
             // equips, a third copy that becomes ammo. Same rule whether it came
-            // off the floor or out of the air.
-            if (pol.OnTake(hand, a, rule, pmo, p)) continue;
+            // off the floor or out of the air. A mod's GrabTakeService is asked
+            // first (RS_GrabPolicy.AskTake); with none loaded it answers nothing
+            // and OnTake decides, as before.
+            if (RS_GrabPolicy.AskTake(hand, a, false) || pol.OnTake(hand, a, rule, pmo, p)) continue;
 
             int result = held.Take(hand, a, rule.subject, rule.pose, rule.twohand, p);
 
