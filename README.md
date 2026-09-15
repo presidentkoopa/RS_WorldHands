@@ -150,3 +150,8 @@ all three live beside each other in `rs_grabpolicy.zs`):
   1 from the air / 0 off the floor, objectArg thing)`, answer ignored:
   `pull.lock`, `pull.unlock`, `pull.start`, `pull.caught`, `pull.refused`,
   `pull.missed`, `pull.blocked`, `pull.aborted` (`RS_GrabPolicy.Tell`).
+
+## Credits
+
+- **The glove** (`models/hands/hand_ermac.iqm`, `hand_ermac.png`) is **Ermac's** (iAmErmac), from his Rusted Legacy mod (MIT): his hand2.md3, rigged onto this package's 22-joint hand so every pose and grab works on it. Ermac wrote DXR and works with this project.
+- The skeleton, pose table and animation are `hand_left.iqm`'s, which is still here.

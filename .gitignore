@@ -2,3 +2,8 @@
 *.pk3
 __pycache__/
 *.bak
+
+# Ermac's glove (Rusted Legacy, MIT) -- kept on disk and in the built pk3, not pushed to GitHub,
+# the same rule as the Slayer and Ermac binaries elsewhere (build lane, 2026-09-14).
+models/hands/hand_ermac.iqm
+models/hands/hand_ermac.png
