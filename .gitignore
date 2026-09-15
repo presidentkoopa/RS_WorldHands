@@ -7,3 +7,5 @@ __pycache__/
 # the same rule as the Slayer and Ermac binaries elsewhere (build lane, 2026-09-14).
 models/hands/hand_ermac.iqm
 models/hands/hand_ermac.png
+# The RS hand with Ermac's fitted poses in it (frames 1298+): derived from his hand2/hand.md3, kept off GitHub too.
+models/hands/hand_left_poses.iqm

@@ -77,8 +77,18 @@
 // is his hand_HD.png. The extents above (32.95 long) are hand_left.iqm's; the
 // glove was scaled onto that bind, so the Scale lines are unchanged.
 //
+// ERMAC'S POSES (2026-09-15). hand_ermac.iqm now carries 1705 frames: 0-1297 are
+// hand_left.iqm's (re-quantized, under 0.002 degrees from before), 1298 + f is his
+// off hand (hand2.md3) frame f, and 1494 + f his gun hand (hand.md3) frame f --
+// each fitted onto this skeleton with the wrist taken out. His gun-hand grips per
+// gun: pistol 6 (trigger 7-13), shotgun 30, super shotgun 47, chainsaw 29,
+// chaingun 84/85, rocket launcher 95/96, plasma rifle 106/107, BFG 113/114.
+// hand_left_poses.iqm is the bare RS mesh with the same 1705 frames (RS_VRBody's
+// "RS bare hands" style wears it). Tools: RS_VRBody/tools/ermac.
+//
 // TO REVERT: put hand_left.iqm / hand_basecolor.png back on the four Model / Skin
-// lines below (both files are still here), or git checkout pre-ermac-hands.
+// lines below (both files are still here), or git checkout pre-ermac-hands. The
+// glove before the poses is in _backups/hands-before-gunposes-20260915-000057.
 Model RS_HandIdleMain
 {
 	Path "models/hands"
