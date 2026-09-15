@@ -31,7 +31,7 @@
 // systems sat saved as `true` while this file said false for both, which is why
 // changing a default looks like a fix that silently did nothing. Change the ini
 // or use the menu; a fresh cvar name is the only way a default ever takes.
-user bool  rs_hands       = true;
+user bool  rs_hands       = false;   // owner's tuned value, baked in 2026-09-15 (was true)
 user float rs_hand_scale  = 1.0;
 
 // Traces pose selection. Pair with the engine's vr_pose_debug to see both
@@ -92,7 +92,7 @@ user int rs_hands_srcframe = -1;
 
 // Tics taken to blend from one hand pose to the next. Lower is snappier, higher
 // is smoother. 0 disables blending and poses snap, which is the old behaviour.
-user float rs_hands_blend = 4.0;
+user float rs_hands_blend = 3.5;   // owner's tuned value, baked in 2026-09-15 (was 4.0)
 
 // How a hand SITS on the bone it is anchored to. Keyed by role rather than by
 // weapon, because a hand wrapped round a pistol grip sits the same way on every
@@ -126,19 +126,19 @@ user float rs_hands_blend = 4.0;
 // With them off, the reach centre falls back to the controller origin, which
 // sits at the WRIST, roughly 10cm behind the palm. The per-hand grab offset
 // sliders exist to put that back.
-user bool rs_handworld = false;
+user bool rs_handworld = true;   // owner's tuned value, baked in 2026-09-15 (was false)
 
 user float rs_hw_main_ofs_x = 0.0;
-user float rs_hw_main_ofs_y = 0.0;
-user float rs_hw_main_ofs_z = 0.0;
+user float rs_hw_main_ofs_y = 11.0;   // owner's tuned value, baked in 2026-09-15 (was 0.0)
+user float rs_hw_main_ofs_z = -8.5;   // owner's tuned value, baked in 2026-09-15 (was 0.0)
 user float rs_hw_main_yaw   = 0.0;
 user float rs_hw_main_pitch = 0.0;
-user float rs_hw_main_roll  = 0.0;
+user float rs_hw_main_roll  = -8.0;   // owner's tuned value, baked in 2026-09-15 (was 0.0)
 user float rs_hw_main_scale = 1.0;
 
 user float rs_hw_off_ofs_x = 0.0;
-user float rs_hw_off_ofs_y = 0.0;
-user float rs_hw_off_ofs_z = 0.0;
+user float rs_hw_off_ofs_y = 11.0;   // owner's tuned value, baked in 2026-09-15 (was 0.0)
+user float rs_hw_off_ofs_z = -8.5;   // owner's tuned value, baked in 2026-09-15 (was 0.0)
 user float rs_hw_off_yaw   = 0.0;
 user float rs_hw_off_pitch = 0.0;
 user float rs_hw_off_roll  = 0.0;
@@ -150,7 +150,7 @@ user float rs_hw_off_scale = 1.0;
 // here, so a menu that holds a pose is the only way to inspect one.
 user int   rs_handworld_forcepose = -1;
 // Tics to travel between shapes. Blends BONE matrices, so a grip closes.
-user float rs_handworld_blend = 4.0;
+user float rs_handworld_blend = 6.0;   // owner's tuned value, baked in 2026-09-15 (was 4.0)
 user bool  rs_handworld_debug = false;
 
 // ---- HAND GRABBING ------------------------------------------------------
@@ -240,8 +240,8 @@ user int rs_grab_scale_space = 1;
 // dropped 2.2 -> 1.0. So the volume is now much narrower across the palm and
 // considerably taller -- a reach along the fingers rather than a flat disc.
 user float rs_grab_m_ofs_x = 0.0;
-user float rs_grab_m_ofs_y = 0.25;
-user float rs_grab_m_ofs_z = -0.75;
+user float rs_grab_m_ofs_y = 0.0;   // owner's tuned value, baked in 2026-09-15 (was 0.25)
+user float rs_grab_m_ofs_z = -100.0;   // owner's tuned value, baked in 2026-09-15 (was -0.75)
 user float rs_grab_m_yaw = 0.0;
 user float rs_grab_m_pitch = 0.0;
 user float rs_grab_m_roll = 0.0;
@@ -252,8 +252,8 @@ user float rs_grab_m_scale_y = 4.0;
 user float rs_grab_m_scale_z = 3.0;
 
 user float rs_grab_o_ofs_x = 0.0;
-user float rs_grab_o_ofs_y = 0.25;
-user float rs_grab_o_ofs_z = -0.75;
+user float rs_grab_o_ofs_y = 0.0;   // owner's tuned value, baked in 2026-09-15 (was 0.25)
+user float rs_grab_o_ofs_z = -100.0;   // owner's tuned value, baked in 2026-09-15 (was -0.75)
 user float rs_grab_o_yaw = 0.0;
 user float rs_grab_o_pitch = 0.0;
 user float rs_grab_o_roll = 0.0;
@@ -782,8 +782,8 @@ user float rs_beam_fog = 0.2;
 // support claim. The engine's own "Two Handed Weapons" option (Options > VR
 // Controls) is what then makes the aim follow the hands; leave that off and a
 // brace is a pose and a hold flag only.
-user bool  rs_stab = true;
-user bool  rs_stab_viz = true;
+user bool  rs_stab = false;   // owner's tuned value, baked in 2026-09-15 (was true)
+user bool  rs_stab_viz = false;   // owner's tuned value, baked in 2026-09-15 (was true)
 // Hold to keep (off, the default): braced while the off grip stays squeezed
 // inside the oval, exactly as the original grip-to-stabilize worked. Tap to
 // latch (on): one squeeze attaches, the grip is free again until the next.
@@ -879,7 +879,7 @@ user bool rs_dgrab_not_when_met = true;
 // So it stays available and stays off. The magazine drawn from the pouch does
 // not go through this at all -- RS_TestPistol sets FollowHandMode on it
 // directly, with its own prefix and its own scale.
-user bool rs_hold_followhand = false;
+user bool rs_hold_followhand = true;   // owner's tuned value, baked in 2026-09-15 (was false)
 
 // A WEAPON SWAP NEEDS THE PALM TURNED UP.
 //
