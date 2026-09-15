@@ -67,6 +67,14 @@
 // one renders inside out. Driving the mirror from scale instead keeps shading
 // right, because the renderer watches for a negative scale product and flips
 // face culling to match.
+// THE RS HAND IS THE DEFAULT AGAIN (owner, 2026-09-15): in the headset the Ermac glove's
+// fingers came out "fucked up, bending odd angles, inflated fingers" -- its fingers are about
+// 35% thicker than the RS hand's and, fitted onto this skeleton in one piece, its creases do
+// not sit at the rig's finger joints. The four blocks below draw hand_left_poses.iqm: the RS
+// mesh carrying every frame hand_ermac.iqm has (Ermac's fitted poses at 1298+ and 1494+), so
+// nothing that addresses a frame changes. The glove stays selectable through RS_VRBody's hand
+// style "glove". The notes below are the glove's history.
+//
 // ERMAC'S GLOVE ON OUR SKELETON (owner, 2026-09-14).
 //
 // hand_ermac.iqm is Ermac's (iAmErmac) fingerless glove from Rusted Legacy (MIT),
@@ -92,8 +100,8 @@
 Model RS_HandIdleMain
 {
 	Path "models/hands"
-	Model 0 "hand_ermac.iqm"
-	Skin 0 "hand_ermac.png"
+	Model 0 "hand_left_poses.iqm"
+	Skin 0 "hand_basecolor.png"
 	Scale -1.0 1.0 1.0
 	Offset 0.0 -18.0 -12.0
 	UseHandOffsets
@@ -107,8 +115,8 @@ Model RS_HandIdleMain
 Model RS_HandIdleOff
 {
 	Path "models/hands"
-	Model 0 "hand_ermac.iqm"
-	Skin 0 "hand_ermac.png"
+	Model 0 "hand_left_poses.iqm"
+	Skin 0 "hand_basecolor.png"
 	Scale 1.0 1.0 1.0
 	Offset 0.0 -18.0 -12.0
 	NOAUTOREVERSE
@@ -178,7 +186,7 @@ Model RS_HandIdleOff
 Model RS_HandWorldMain
 {
 	Path "models/hands"
-	Model 0 "hand_ermac.iqm"
+	Model 0 "hand_left_poses.iqm"
 	PlacementCVars rs_hw_main
 	// SKIN IS LOAD-BEARING, AND ITS ABSENCE IS SILENT.
 	// IQMModel::RenderFrame (models_iqm.cpp:521-537) resolves a mesh skin in three
@@ -189,7 +197,7 @@ Model RS_HandWorldMain
 	// exists nowhere in this pk3, so these two blocks drew nothing from the day they
 	// were written. Both psprite blocks above always carried a Skin, which is why
 	// only the world hands were affected.
-	Skin 0 "hand_ermac.png"
+	Skin 0 "hand_basecolor.png"
 
 	// PLACEMENT, FOUND IN A HEADSET 2026-08-30 AND FOLDED IN HERE.
 	//
@@ -221,7 +229,7 @@ Model RS_HandWorldMain
 Model RS_HandWorldOff
 {
 	Path "models/hands"
-	Model 0 "hand_ermac.iqm"
+	Model 0 "hand_left_poses.iqm"
 	PlacementCVars rs_hw_off
 	// SKIN IS LOAD-BEARING, AND ITS ABSENCE IS SILENT.
 	// IQMModel::RenderFrame (models_iqm.cpp:521-537) resolves a mesh skin in three
@@ -232,7 +240,7 @@ Model RS_HandWorldOff
 	// exists nowhere in this pk3, so these two blocks drew nothing from the day they
 	// were written. Both psprite blocks above always carried a Skin, which is why
 	// only the world hands were affected.
-	Skin 0 "hand_ermac.png"
+	Skin 0 "hand_basecolor.png"
 
 	// PLACEMENT, FOUND IN A HEADSET 2026-08-30 AND FOLDED IN HERE.
 	//
