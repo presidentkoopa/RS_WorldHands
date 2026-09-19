@@ -69,7 +69,15 @@ class RS_WorldFist : Weapon replaces Fist
 	// as it always did.
 	action bool RS_HandBusy()
 	{
-		let pmo = players[consoleplayer].mo;
+		// THE OWNER OF THIS WEAPON, NEVER consoleplayer.
+		//
+		// This decides whether the swing happens, and it used to ask about the player
+		// THIS MACHINE DRAWS FOR. On any remote machine that is a different player, so
+		// the busy test read the wrong pawn and two machines could disagree about
+		// whether a punch was thrown at all. In a weapon action `self` is the pawn and
+		// `invoker` is the weapon, so the owner is right here and costs nothing.
+		let pmo = PlayerPawn(invoker.Owner);
+		if (!pmo) pmo = PlayerPawn(self);
 		if (!pmo) return false;
 
 		int hand = invoker.bOffhandWeapon ? 1 : 0;
@@ -147,9 +155,22 @@ class RS_WorldFistOff : RS_WorldFist
 // in your loadout.
 class RS_WorldFistGiver : EventHandler
 {
+	// EVERY PLAYER, BY PLAYER NUMBER -- NEVER consoleplayer.
+	//
+	// This used to return early unless the spawning player was the one this machine
+	// draws for, so the off-hand fist was given on ONE machine and every other
+	// machine held a different inventory for the same player. Worse, this weapon
+	// rolls its damage (Damage(), 2d10 on the RSFist stream): whether that stream
+	// advances at all then depended on which machine you asked, and once two
+	// machines' streams part they never come back -- the fault outlives the swing
+	// that caused it.
+	//
+	// PlayerSpawned runs on every machine for every player, which is the whole point
+	// of it. Giving by e.PlayerNumber is what makes all of them agree.
+	//
+	// Nothing about this is VR: it was broken in plain desktop co-op too.
 	override void PlayerSpawned(PlayerEvent e)
 	{
-		if (e.PlayerNumber != consoleplayer) return;
 		let pmo = players[e.PlayerNumber].mo;
 		if (!pmo) return;
 

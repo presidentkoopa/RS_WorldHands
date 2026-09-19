@@ -158,11 +158,16 @@ user bool  rs_handworld_debug = false;
 // A property of the HAND. These were written into a weapon package and vanished
 // with it; nothing about a reach volume is weapon-specific.
 user bool  rs_grab = true;
-user bool  rs_grabviz = true;
+// DEFAULTS OFF. The reach OVAL drawn on each hand. The owner: 'there is no option to toggle
+// hand oval right now so it is always on' -- there was a row, buried under
+// Feedback and named 'reach volume', but it defaulted ON, which is the fault.
+user bool  rs_grabviz = false;
 user bool  rs_grabviz_onlywhenhot = false;
 user float rs_grabviz_alpha = 0.55;
 // Draw the collision volume of whatever is in reach.
-user bool  rs_volviz = true;
+// DEFAULTS OFF. Draws the collision volume of whatever is in reach. Same class of thing as
+// rs_grabviz and it was on for the same reason: nobody turned it off.
+user bool  rs_volviz = false;
 
 // The reach OVAL, per hand. Hand-local semi-axes: x ACROSS THE PALM, y ALONG
 // THE FINGERS, z through the back of the hand. 34 units is a metre; a fist is
@@ -782,7 +787,24 @@ user float rs_beam_fog = 0.2;
 // support claim. The engine's own "Two Handed Weapons" option (Options > VR
 // Controls) is what then makes the aim follow the hands; leave that off and a
 // brace is a pose and a hold flag only.
-user bool  rs_stab = false;   // owner's tuned value, baked in 2026-09-15 (was true)
+// USER, AND THAT WAS NEVER THE PROBLEM. This was briefly made `server` on the
+// reasoning that stabilising feeds AActor.TwoHandedHold, which weapons read to
+// tighten spread -- damage, not decoration. The reasoning was right about the stakes
+// and wrong about the cause.
+//
+// `user` sets CVAR_USERINFO, and USERINFO IS NETWORKED: ForceSet fires
+// UserInfoChanged on every CVAR_USERINFO change (c_cvars.cpp:254), the same path
+// that already carries name, colour, skin and autoaim. So CVar.GetCVar(name,
+// players[pn]) answers the SAME on every machine. The scope was never the defect.
+//
+// THE DEFECT IS players[consoleplayer] ON A PATH EVERY MACHINE RUNS --
+// rs_stabilize.zs WorldTick reads it, and consoleplayer is a different person on
+// each machine. Forcing the cvar to `server` made every machine agree on the VALUE
+// while still asking about the wrong PLAYER, which hides the symptom and keeps the
+// bug. It also takes a comfort setting away from the player: whether to stabilise is
+// exactly the kind of thing a VR player and a desktop player must set differently on
+// one server.
+user   bool  rs_stab = false;   // owner's tuned value, baked in 2026-09-15 (was true)
 user bool  rs_stab_viz = false;   // owner's tuned value, baked in 2026-09-15 (was true)
 // Hold to keep (off, the default): braced while the off grip stays squeezed
 // inside the oval, exactly as the original grip-to-stabilize worked. Tap to

@@ -266,7 +266,7 @@ class RS_Pull : EventHandler
 		if (hand != 0 && hand != 1 || !a) return false;
 		if (flyActor[hand]) return false;
 		let held = RS_Held.Get();
-		if (held && held.HandIsFull(hand)) return false;
+		if (held && held.HandIsFull(pmo.PlayerNumber(), hand)) return false;
 		// Not something a hand already has hold of -- see the note in
 		// RS_Cone.Best. Refused here as well as filtered there because the cone
 		// is not the only thing that can name a target, and this is the door the
@@ -334,7 +334,7 @@ class RS_Pull : EventHandler
 		Actor a = lockActor[hand];
 		if (!a) return;
 		let held = RS_Held.Get();
-		if (held && held.HandIsFull(hand)) { Unlock(hand); return; }
+		if (held && held.HandIsFull(pmo.PlayerNumber(), hand)) { Unlock(hand); return; }
 		double reach = RS_Reach.Num("rs_dgrab_reach", p, 512.0);
 		Vector3 mid = (a.Pos.x, a.Pos.y, a.Pos.z + a.Height * 0.5);
 		if ((mid - RS_Reach.Centre(pmo, p, hand)).Length() > reach * 1.25)
@@ -525,7 +525,7 @@ class RS_Pull : EventHandler
 		else if (!a)                        why = "no target";
 		else if (flyActor[hand])            why = "this hand already has something in flight";
 		else if (!held)                     why = "RS_Held missing";
-		else if (held.HandIsFull(hand))     why = "this hand is already holding something";
+		else if (held.HandIsFull(pmo.PlayerNumber(), hand)) why = "this hand is already holding something";
 		// Nor out of the other hand. Same reason as Lock: this is the call that
 		// would actually launch it.
 		else if (held.IsHeld(a))            why = "target is held by a hand already";
@@ -735,7 +735,9 @@ class RS_Pull : EventHandler
 			return true;
 		}
 
-		int res = held.Take(hand, a, rule.subject, rule.pose, rule.twohand, p);
+		// THE PLAYER WHOSE HAND IT IS -- the pawn is right here, so there is no
+		// reason to ask about whoever this machine happens to draw.
+		int res = held.Take(pmo.PlayerNumber(), hand, a, rule.subject, rule.pose, rule.twohand, p);
 		if (res == RS_Held.TAKE_REFUSED)
 		{
 			// Put flight's own flags back and keep flying. A refused catch must

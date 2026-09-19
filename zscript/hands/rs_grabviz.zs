@@ -338,9 +338,11 @@ class RS_GrabViz : EventHandler
                 {
                     want = null;
                 }
-                else if (held && held.HeldBy(h))
+                // consoleplayer: this is the visualiser for THIS machine's hands.
+                // It draws and decides nothing, so a local player is the right answer.
+                else if (held && held.HeldBy(consoleplayer, h))
                 {
-                    want = held.HeldBy(h);
+                    want = held.HeldBy(consoleplayer, h);
                     inHand = true;
                 }
                 else if (pull && pull.Locked(h))
@@ -550,7 +552,7 @@ class RS_GrabViz : EventHandler
             }
 
             // A HAND FULL OF SOMETHING IS NOT AIMING. Nothing else silences it.
-            if (held && held.HandIsFull(h))
+            if (held && held.HandIsFull(consoleplayer, h))   // drawing only, see above
             {
                 // Zero length AND zero intensity -- either alone still leaves a
                 // dot sitting at the origin.

@@ -468,7 +468,9 @@ class RS_HandsAlwaysOn : EventHandler
 		let hs = RS_Held.Get();
 		if (hs)
 		{
-			int hp = hs.PoseIn((layer == LAYER_MAIN) ? 0 : 1);
+			// consoleplayer, and legitimately: this is the HUD hand THIS machine
+			// draws. The pose decides a sprite, never a consequence.
+			int hp = hs.PoseIn(consoleplayer, (layer == LAYER_MAIN) ? 0 : 1);
 			if (hp >= 0)
 				pose = hp;
 		}
@@ -485,7 +487,7 @@ class RS_HandsAlwaysOn : EventHandler
 		// Below the held pose on purpose: once something is actually IN the
 		// hand, its own shape wins. You cannot be reaching for a thing you are
 		// already holding.
-		if (hs && hs.PoseIn((layer == LAYER_MAIN) ? 0 : 1) < 0)
+		if (hs && hs.PoseIn(consoleplayer, (layer == LAYER_MAIN) ? 0 : 1) < 0)
 		{
 			int hnd = (layer == LAYER_MAIN) ? 0 : 1;
 			let pl = RS_Pull.Get();

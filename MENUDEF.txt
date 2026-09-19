@@ -566,8 +566,8 @@ OptionMenu "RS_GrabFeedMenu"
 
 	StaticText ""
 	StaticText "Gauges. The drawn volume IS the tested volume.", 1
-	Option "Show the reach volume",     "rs_grabviz", "OnOff"
-	Option "Only when something is in", "rs_grabviz_onlywhenhot", "OnOff"
+	Option "Show the reach oval on your hands", "rs_grabviz", "OnOff"
+	Option "  Only when something is in",  "rs_grabviz_onlywhenhot", "OnOff"
 	Option "Show what it is on",        "rs_volviz", "OnOff"
 	Slider "Opacity",                   "rs_grabviz_alpha", 0.05, 1.0, 0.05, 2
 

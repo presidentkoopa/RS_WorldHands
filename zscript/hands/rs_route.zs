@@ -42,7 +42,7 @@ class RS_Route : EventHandler
 		if (hand != 0 && hand != 1 || !pmo || !p) return false;
 		if (!Flag("rs_use_at_face", p, true)) return false;
 		let held = RS_Held.Get();
-		Actor a = held ? held.HeldBy(hand) : null;
+		Actor a = held ? held.HeldBy(pmo.PlayerNumber(), hand) : null;
 		if (!a) return false;
 
 		// THE SAME TEST THE USE ITSELF APPLIES, and it was missing here.
@@ -81,14 +81,14 @@ class RS_Route : EventHandler
 
 		for (int h = 0; h < 2; h++)
 		{
-			Actor a = held.HeldBy(h);
+			Actor a = held.HeldBy(pmo.PlayerNumber(), h);
 			if (!a) { wasNear[h] = false; continue; }
 
 			// Only the hand that is PRIMARY on it. A two-handed object brought
 			// up would otherwise be offered to your face twice in one tic, and
 			// the second offer would run against an object the first already
 			// consumed.
-			if (held.PrimaryHand(a) != h) { wasNear[h] = false; continue; }
+			if (held.PrimaryHand(pmo.PlayerNumber(), a) != h) { wasNear[h] = false; continue; }
 
 			Vector3 mid = (a.Pos.x, a.Pos.y, a.Pos.z + a.Height * 0.5);
 			bool near = (mid - pmo.HmdPos).Length() <= reach;

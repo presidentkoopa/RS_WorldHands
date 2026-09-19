@@ -619,7 +619,10 @@ class RS_GrabPolicy : EventHandler
 
 		int owned = pmo.CountInv(a.GetClassName());
 		let held = RS_Held.Get();
-		bool handFree = !held || !held.HandIsFull(hand);
+		// The player whose hand this is -- the pawn is already in scope here, so
+		// there is no excuse for asking about whoever this machine draws.
+		int gpnum = pmo && pmo.player ? pmo.PlayerNumber() : consoleplayer;
+		bool handFree = !held || !held.HandIsFull(gpnum, hand);
 
 		if (owned >= 2)
 		{

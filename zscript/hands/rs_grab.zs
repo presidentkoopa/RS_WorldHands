@@ -531,7 +531,7 @@ class RS_Reach play
         while (it.Next())
         {
             Actor a = it.thing;
-            if (held && held.HeldBy(hand) == a) continue;
+            if (held && held.HeldBy(pmo.PlayerNumber(), hand) == a) continue;
             // The RULE, not just its yes/no. The weight is per-class data and
             // this is the one place that reads it; asking Decide twice -- once
             // for the answer and once for the number -- would be the same
@@ -665,7 +665,7 @@ class RS_GrabHandler : EventHandler
                                PlayerPawn pmo, PlayerInfo p) const
     {
         if (!held) return false;
-        return held.HandIsFull(hand) || TargetFor(hand) != null
+        return held.HandIsFull(pmo.PlayerNumber(), hand) || TargetFor(hand) != null
             || (pull && (pull.Flying(hand) || pull.Locked(hand) != null))
             || SwapPoised(hand, held, pmo, p);
     }
@@ -736,7 +736,7 @@ class RS_GrabHandler : EventHandler
         if (!RS_Reach.Flag("rs_swap_overlap", p, true)) return false;
 
         // Carrying anything makes this a two-handed join, not a pass.
-        if (held.HandIsFull(hand) || held.HandIsFull(1 - hand)) return false;
+        if (held.HandIsFull(pmo.PlayerNumber(), hand) || held.HandIsFull(pmo.PlayerNumber(), 1 - hand)) return false;
         if (nearTarget[hand]) return false;
 
         Weapon src = (hand == 0) ? p.OffhandWeapon : p.ReadyWeapon;
@@ -963,7 +963,7 @@ class RS_GrabHandler : EventHandler
         {
             nearTarget[hand] = null;
             farTarget[hand]  = null;
-            if (held.HandIsFull(hand)) continue;
+            if (held.HandIsFull(pmo.PlayerNumber(), hand)) continue;
 
             // AN OBJECT IN FLIGHT IS A TARGET, not a reason to stop looking.
             //
@@ -1143,7 +1143,7 @@ class RS_GrabHandler : EventHandler
             // tell which -- there is no console to ask, and the two have
             // completely different causes. This is one line per press, naming
             // the state of every input the decision reads.
-            if (press && dbg && !held.HandIsFull(hand)
+            if (press && dbg && !held.HandIsFull(pmo.PlayerNumber(), hand)
                 && !(pull && pull.Flying(hand))
                 && !nearTarget[hand] && !farTarget[hand]
                 && !(pull && pull.Locked(hand)))
@@ -1209,7 +1209,7 @@ class RS_GrabHandler : EventHandler
             // drew a magazine also locked a cone target or hand-swapped.
             // (RS_Held's own holds use the same subjects with a FULL hand.)
             int subjHere = (hand == 0) ? pmo.GripSubjectMain : pmo.GripSubjectOff;
-            bool reloadReach = ReloadSubject(subjHere) && !(held && held.HandIsFull(hand));
+            bool reloadReach = ReloadSubject(subjHere) && !(held && held.HandIsFull(pmo.PlayerNumber(), hand));
             if (reloadReach)
             {
                 if (press && dbg)
@@ -1223,7 +1223,7 @@ class RS_GrabHandler : EventHandler
                 continue;
             }
 
-            bool full = held.HandIsFull(hand);
+            bool full = held.HandIsFull(pmo.PlayerNumber(), hand);
 
             // THE FLICK. A yank of an empty hand toward yourself, at something
             // the cone has already locked, pulls it -- no button.
@@ -1373,10 +1373,15 @@ class RS_GrabHandler : EventHandler
 
             if (((!toggle && release) || throwRelease) && full)
             {
-                Actor was = held.HeldBy(hand);
+                Actor was = held.HeldBy(pmo.PlayerNumber(), hand);
                 String wasName = "something";
                 if (was) wasName = was.GetClassName();
-                held.Release(hand, pmo, p);
+                // LETTING GO IS A DECISION, SO IT TRAVELS. The throw is measured
+                // here, off this machine's controller, and goes in the command as a
+                // value -- the applier must never re-derive it from a pose it does
+                // not have. RS_HandNet's applier then performs the release on every
+                // machine, this one included, for the player the command names.
+                RS_HandNet.SendDrop(hand, RS_Throw.VelocityFor(hand, pmo, p));
                 if (dbg) Console.Printf("[RSHELD] hand %d let go of %s", hand, wasName);
                 continue;
             }
@@ -1464,7 +1469,7 @@ class RS_GrabHandler : EventHandler
             // something grabbable inside this hand's volume means the press was
             // a reach, not a swap. A weapon swap is what a grip means only when
             // there is nothing else it could mean.
-            bool carrying = held && (held.HandIsFull(hand) || held.HandIsFull(1 - hand));
+            bool carrying = held && (held.HandIsFull(pmo.PlayerNumber(), hand) || held.HandIsFull(pmo.PlayerNumber(), 1 - hand));
 
             // A BRACE AND A SWAP CAN BE THE SAME TAP. An off-hand squeeze with
             // the palms together while the main hand holds a pistol is both
@@ -1565,10 +1570,15 @@ class RS_GrabHandler : EventHandler
 
             if (toggle && full)
             {
-                Actor was = held.HeldBy(hand);
+                Actor was = held.HeldBy(pmo.PlayerNumber(), hand);
                 String wasName = "something";
                 if (was) wasName = was.GetClassName();
-                held.Release(hand, pmo, p);
+                // LETTING GO IS A DECISION, SO IT TRAVELS. The throw is measured
+                // here, off this machine's controller, and goes in the command as a
+                // value -- the applier must never re-derive it from a pose it does
+                // not have. RS_HandNet's applier then performs the release on every
+                // machine, this one included, for the player the command names.
+                RS_HandNet.SendDrop(hand, RS_Throw.VelocityFor(hand, pmo, p));
                 if (dbg) Console.Printf("[RSHELD] hand %d let go of %s", hand, wasName);
                 continue;
             }
@@ -1621,7 +1631,10 @@ class RS_GrabHandler : EventHandler
             // and OnTake decides, as before.
             if (RS_GrabPolicy.AskTake(hand, a, false) || pol.OnTake(hand, a, rule, pmo, p)) continue;
 
-            int result = held.Take(hand, a, rule.subject, rule.pose, rule.twohand, p);
+            // The player whose hand this is. The grab DECISION was made from this
+            // machine's controller just above; the take itself names its player so
+            // it means the same thing wherever it runs.
+            int result = held.Take(pmo.PlayerNumber(), hand, a, rule.subject, rule.pose, rule.twohand, p);
 
             if (dbg)
             {

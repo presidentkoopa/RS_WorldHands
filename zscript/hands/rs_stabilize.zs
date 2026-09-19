@@ -529,7 +529,7 @@ class RS_Stabilize : EventHandler
         // a stale lease. Every extra guard here was one more silent reason for
         // a hand visibly inside the oval to do nothing.
         let held = RS_Held.Get();
-        if (held && held.HandIsFull(1)) return true;
+        if (held && held.HandIsFull(pmo.PlayerNumber(), 1)) return true;
 
         // A hand with its own weapon in it -- a grenade, a second gun -- is
         // not empty, and only an empty hand grabs the other hand's gun. A
