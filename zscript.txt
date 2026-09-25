@@ -62,3 +62,7 @@ version "5.0.0"
 // not two ledgers -- so if RS_VR_Unified is ever loaded beside this, its copy
 // has to come out. That is true of all thirty classes here, not just this one.
 #include "zscript/arbiter/rs_griparbiter.zs"
+
+// GRIP POINT ADJUSTMENT FROM THE CONTROLLERS. Hold a key and the sticks move a grip oval
+// instead of the player; see the file for why a menu cannot do this job.
+#include "zscript/hands/rs_ovaledit.zs"

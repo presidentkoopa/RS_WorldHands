@@ -1,0 +1,23 @@
+// GRIP POINT ADJUSTMENT, FROM THE CONTROLLERS.
+//
+// A menu cannot do this: opening one pauses the game, so the gun you are adjusting stops
+// being held the moment you go to adjust it, and the oval you are dragging is attached to
+// a hand that is no longer moving. That is not a thing to work around in the menu; it is
+// the reason not to use one.
+//
+// TWO KEYS. Hold the first and the sticks stop moving you and move the selected oval
+// instead; let go and they are yours again, instantly. Tap the second to step to the next
+// oval. Bind them to a shoulder and a face button.
+//
+// THE PLUS BELONGS IN THE BIND, NOT ONLY IN THE ALIAS. The engine sends a key-up event
+// only for a binding whose command starts with '+', and it runs that command verbatim on
+// the way down. Bound as the bare name it would look for an alias of exactly that name,
+// find neither the + nor the - one, and do nothing at all -- bound, aliased, and silent.
+// That cost a whole session on the body rig's adjust key (2026-09-25).
+addmenusection "RS World Hands" 1
+addmenukey "Grip points: adjust with the sticks (hold)" +rs_ovaledit
+addmenukey "Grip points: next point"                    rs_ovalnext
+
+alias +rs_ovaledit "netevent rs_ovaledit"
+alias -rs_ovaledit "netevent rs_ovaledit_off"
+alias rs_ovalnext  "netevent rs_ovalnext"

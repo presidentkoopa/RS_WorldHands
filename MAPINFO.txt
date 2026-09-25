@@ -39,5 +39,5 @@
 // does, it will be polled in the reverse of the order written above.
 GameInfo
 {
-	AddEventHandlers = "RS_HandsAlwaysOn", "RS_HandWorldHandler", "RS_GrabPolicy", "RS_Stabilize", "RS_GrabHandler", "RS_Swing", "RS_Held", "RS_Pull", "RS_Route", "RS_GrabViz", "RS_WorldFistGiver", "RS_HandNet"
+	AddEventHandlers = "RS_HandsAlwaysOn", "RS_OvalEdit", "RS_HandWorldHandler", "RS_GrabPolicy", "RS_Stabilize", "RS_GrabHandler", "RS_Swing", "RS_Held", "RS_Pull", "RS_Route", "RS_GrabViz", "RS_WorldFistGiver", "RS_HandNet"
 }

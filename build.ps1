@@ -46,7 +46,7 @@ $out  = Join-Path $root 'RS_WorldHands.pk3'
 # its MAPINFO registers no event handlers at all, which reads in-headset as
 # "the whole mod does nothing."
 $requiredLumps = @('zscript.txt', 'MAPINFO.txt', 'CVARINFO.txt', 'MENUDEF.txt')
-$optionalLumps = @('MODELDEF.txt', 'TEXTURES.txt', 'TRNSLATE.txt', 'SNDINFO.txt', 'ANIMDEFS.txt')
+$optionalLumps = @('MODELDEF.txt', 'TEXTURES.txt', 'TRNSLATE.txt', 'SNDINFO.txt', 'ANIMDEFS.txt', 'KEYCONF')
 $contentDirs   = @('zscript', 'models', 'graphics', 'sprites', 'sounds')
 
 $files = @()
@@ -175,7 +175,10 @@ $cvDecl = @{}
 foreach ($m in [regex]::Matches($cvtxt, '(?im)^\s*(?:server|user|nosave|noarchive)\s+\w+\s+([A-Za-z_][A-Za-z0-9_]*)\s*=')) {
     $cvDecl[$m.Groups[1].Value.ToLower()] = $true
 }
-$prefixes = @('rs_grab_m', 'rs_grab_o')
+# PREFIXES, not cvars: the code builds a name from these (prefix .. "_ofs_x"), and every
+# name it builds IS declared. rs_hw_main / rs_hw_off are the hand seats, written by
+# rs_ovaledit.zs the same way the MODELDEF's PlacementCVars line names them.
+$prefixes = @('rs_grab_m', 'rs_grab_o', 'rs_hw_main', 'rs_hw_off')
 
 # CVARS ANOTHER PACKAGE OWNS, READ DEFENSIVELY. Not a way to silence this check
 # -- a name goes here only with a call site that handles absence, and the entry
@@ -191,6 +194,19 @@ $prefixes = @('rs_grab_m', 'rs_grab_o')
 #       the hand exactly as before.
 $foreign = @('rs_body_poseframe_main', 'rs_body_poseframe_off')
 
+# NETEVENT NAMES ARE NOT CVARS, and they look exactly like them to the scan below: both
+# are rs_-prefixed strings in double quotes. Every netevent this package handles is
+# declared in its own KEYCONF as `netevent <name>`, so that file IS the list -- it cannot
+# drift from the code, and a handler for an event nothing can fire still gets caught by
+# having no KEYCONF entry.
+$eventNames = @()
+$kcPath = Join-Path $root 'KEYCONF'
+if (Test-Path $kcPath) {
+    foreach ($m in [regex]::Matches((Get-Content $kcPath -Raw), '(?im)netevent\s+([A-Za-z_][A-Za-z0-9_]*)')) {
+        $eventNames += $m.Groups[1].Value
+    }
+}
+
 $cvMiss = 0
 $seen = @{}
 foreach ($m in [regex]::Matches($allZs, '"(rs_[a-z0-9_]+)"')) {
@@ -199,6 +215,7 @@ foreach ($m in [regex]::Matches($allZs, '"(rs_[a-z0-9_]+)"')) {
     $seen[$n] = $true
     if ($prefixes -contains $n) { continue }
     if ($foreign  -contains $n) { continue }
+    if ($eventNames -contains $n) { continue }   # a netevent from this package's KEYCONF
     if (-not $cvDecl.ContainsKey($n.ToLower())) {
         Write-Warning "cvar named in code but NOT declared in CVARINFO (reads as zero, silently): $n"
         $cvMiss++; $fail++

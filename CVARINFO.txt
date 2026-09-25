@@ -921,3 +921,6 @@ user bool rs_swap_needs_palm = true;
 // the right shape on one hand system and an open hand on the other. Same
 // mapping, same source, so the two agree.
 user bool rs_handworld_subject = true;
+
+// How fast a stick moves a grip oval while the adjust key is held (rs_ovaledit.zs).
+user float rs_oval_rate = 0.12;
