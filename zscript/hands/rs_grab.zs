@@ -839,7 +839,27 @@ class RS_GrabHandler : EventHandler
         //
         // Only values that could have come from the old range: anything already
         // past 1.0 was set after the change and is left alone.
-        if (have < 3)
+        // [HANDUNITS] RETIRED, AND IT MUST NOT RUN AGAIN.
+        //
+        // This scaled saved hand offsets by 100 for an engine state that no longer
+        // exists: the follow-hand branch carrying a compensating MODELDEF Scale of about
+        // 0.01. On 2026-09-25 that whole scheme was removed -- models.cpp now divides
+        // vr_vunits_per_meter back out, one model unit is one map unit on every world
+        // path, and every saved offset was converted ONCE by 0.34
+        // (CardPipeline/hand_units/hand_units.py).
+        //
+        // SO THE TWO MIGRATIONS COLLIDE. This one fires on `abs(v) <= 1.0`, on the
+        // reasoning that only a value from the old fine range could be that small -- and
+        // the 0.34 conversion pushed correct, current values straight into it. The
+        // owner's support point had been converted to rs_stab_ofs_y 0.748 and
+        // rs_stab_ofs_z -0.136; this would have made them 74.8 and -13.6 and thrown the
+        // brace point across the room, on an ini that was already right.
+        //
+        // The version is still bumped below, so an ini that never saw either migration
+        // is marked done rather than left to be caught by some future revival of this.
+        // Anything genuinely stranded in the old range predates the 0.34 pass and is
+        // re-seated from Options > World Hands, which is what that menu is for.
+        if (false)
         {
             bool moved = false;
             static const String OFS[] = {

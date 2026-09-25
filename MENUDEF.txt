@@ -113,18 +113,18 @@ OptionMenu "RS_HandsOptions"
 	// world-hand block in MODELDEF.txt). The rotation sliders below are degrees
 	// and were never affected.
 	StaticText "  main hand", 1
-	Slider "M Left / Right",   "rs_hw_main_ofs_x", -100.0, 100.0, 0.5, 1
-	Slider "M Forward / Back", "rs_hw_main_ofs_y", -100.0, 100.0, 0.5, 1
-	Slider "M Down / Up",      "rs_hw_main_ofs_z", -100.0, 100.0, 0.5, 1
+	Slider "M Left / Right",   "rs_hw_main_ofs_x", -34.0, 34.0, 0.17, 1
+	Slider "M Forward / Back", "rs_hw_main_ofs_y", -34.0, 34.0, 0.17, 1
+	Slider "M Down / Up",      "rs_hw_main_ofs_z", -34.0, 34.0, 0.17, 1
 	Slider "M Yaw",            "rs_hw_main_yaw",  -180, 180, 1, 1
 	Slider "M Pitch",          "rs_hw_main_pitch",-180, 180, 1, 1
 	Slider "M Roll",           "rs_hw_main_roll", -180, 180, 1, 1
 	Slider "M Scale",          "rs_hw_main_scale", 0.05, 5.0, 0.05, 2
 
 	StaticText "  off hand", 1
-	Slider "O Left / Right",   "rs_hw_off_ofs_x", -100.0, 100.0, 0.5, 1
-	Slider "O Forward / Back", "rs_hw_off_ofs_y", -100.0, 100.0, 0.5, 1
-	Slider "O Down / Up",      "rs_hw_off_ofs_z", -100.0, 100.0, 0.5, 1
+	Slider "O Left / Right",   "rs_hw_off_ofs_x", -34.0, 34.0, 0.17, 1
+	Slider "O Forward / Back", "rs_hw_off_ofs_y", -34.0, 34.0, 0.17, 1
+	Slider "O Down / Up",      "rs_hw_off_ofs_z", -34.0, 34.0, 0.17, 1
 	Slider "O Yaw",            "rs_hw_off_yaw",  -180, 180, 1, 1
 	Slider "O Pitch",          "rs_hw_off_pitch",-180, 180, 1, 1
 	Slider "O Roll",           "rs_hw_off_roll", -180, 180, 1, 1
@@ -296,12 +296,12 @@ OptionMenu "RS_GrabReachMenu"
 	StaticText "Where it sits on the hand -- live", 1
 	StaticText "With world hands off, the reach centres on the", 1
 	StaticText "CONTROLLER, which is your wrist. Push it forward.", 1
-	Slider "M Forward / back", "rs_grab_m_ofs_y", -100.0, 100.0, 0.5, 1
-	Slider "M Left / right",   "rs_grab_m_ofs_x", -100.0, 100.0, 0.5, 1
-	Slider "M Down / up",      "rs_grab_m_ofs_z", -100.0, 100.0, 0.5, 1
-	Slider "O Forward / back", "rs_grab_o_ofs_y", -100.0, 100.0, 0.5, 1
-	Slider "O Left / right",   "rs_grab_o_ofs_x", -100.0, 100.0, 0.5, 1
-	Slider "O Down / up",      "rs_grab_o_ofs_z", -100.0, 100.0, 0.5, 1
+	Slider "M Forward / back", "rs_grab_m_ofs_y", -34.0, 34.0, 0.17, 1
+	Slider "M Left / right",   "rs_grab_m_ofs_x", -34.0, 34.0, 0.17, 1
+	Slider "M Down / up",      "rs_grab_m_ofs_z", -34.0, 34.0, 0.17, 1
+	Slider "O Forward / back", "rs_grab_o_ofs_y", -34.0, 34.0, 0.17, 1
+	Slider "O Left / right",   "rs_grab_o_ofs_x", -34.0, 34.0, 0.17, 1
+	Slider "O Down / up",      "rs_grab_o_ofs_z", -34.0, 34.0, 0.17, 1
 
 	// THE ROTATIONS WERE DECLARED AND HAD NO ROWS. The renderer reads
 	// <prefix>_yaw/_pitch/_roll for every PlacementCVars model whether a menu
@@ -361,9 +361,9 @@ OptionMenu "RS_StabMenu"
 	Slider "  Along the barrel",              "rs_stab_scale_y", 0.2, 10, 0.1, 1
 	Slider "  Across",                        "rs_stab_scale_x", 0.2, 10, 0.1, 1
 	Slider "  Up and down",                   "rs_stab_scale_z", 0.2, 10, 0.1, 1
-	Slider "Forward / back",                  "rs_stab_ofs_y", -100.0, 100.0, 0.5, 1
-	Slider "Left / right",                    "rs_stab_ofs_x", -100.0, 100.0, 0.5, 1
-	Slider "Down / up",                       "rs_stab_ofs_z", -100.0, 100.0, 0.5, 1
+	Slider "Forward / back",                  "rs_stab_ofs_y", -34.0, 34.0, 0.17, 1
+	Slider "Left / right",                    "rs_stab_ofs_x", -34.0, 34.0, 0.17, 1
+	Slider "Down / up",                       "rs_stab_ofs_z", -34.0, 34.0, 0.17, 1
 	StaticText "How it is turned -- declared all along, never on a row", "DarkGray"
 	Slider "Yaw",                             "rs_stab_yaw",   -180, 180, 1, 0
 	Slider "Pitch",                           "rs_stab_pitch", -180, 180, 1, 0

@@ -546,6 +546,52 @@ class RS_HandPoseService : Service play
             return hd ? hd.poseHold : -1;
         }
 
+        // THE FRAME THIS HAND IS ACTUALLY DRAWN IN (the one it is blending toward), or -1.
+        //
+        // Not pose.get: that is only what some mod PUBLISHED, and most of the time nothing
+        // is -- the hand is posed from its subject, its grip context or its trigger. This
+        // is the final answer after every rule in WorldTick has had its say. A whole VR body
+        // wearing its own hands (RS_VRBody) reads it to put the same grip on its own finger
+        // bones, from a table baked off this very model -- so the two hands can never
+        // disagree about which shape the player's hand is in. Render-side: for looks only.
+        if (request ~== "pose.current")
+        {
+            let hd = RS_HandWorldHandler.Get(hand);
+            return hd ? hd.GetPose() : -1;
+        }
+
+        // IS THIS HAND HOLDING SOMETHING? 1 yes, 0 no, -1 cannot say.
+        //
+        // THE QUESTION NOBODY WAS ASKING, AND IT COST A BUG. A consumer that wants to
+        // close a hand around an object -- the VR body posing its own fingers, say --
+        // reached for the grip arbiter's `grip.held`, which is a DIFFERENT question
+        // wearing a similar name: it means "some mod has a CLAIM on this hand", and a
+        // claim is a LEASE that dies after 70 tics unless its owner keeps renewing it.
+        // Anything holding a gun without renewing reads as an empty hand, so the fingers
+        // open and close as the lease lapses and is retaken. The owner's report was
+        // "hands occasionally grip", which is precisely what an intermittent lease looks
+        // like from inside a headset.
+        //
+        // RS_Held already knows the real answer and keeps it per player: PoseIn returns
+        // -1 when a hand holds nothing. It is an EventHandler rather than a Service, so
+        // it is found BY STRING here and published through the service that already owns
+        // hand pose -- rather than every consumer reaching into it separately, which is
+        // how the two grip arbiters happened.
+        //
+        // THE PAWN IS REQUIRED, never defaulted to consoleplayer. What a hand holds is
+        // per-player state, and a lookup that quietly answers for the local player is how
+        // a mod ends up right on one machine and wrong on every other.
+        if (request ~== "pose.holding")
+        {
+            let pmo = PlayerPawn(objectArg);
+            if (!pmo) return -1;
+            int pnum = pmo.PlayerNumber();
+            if (pnum < 0 || pnum >= MAXPLAYERS) return -1;
+            let held = RS_Held(EventHandler.Find("RS_Held"));
+            if (!held) return -1;
+            return held.PoseIn(pnum, hand) >= 0 ? 1 : 0;
+        }
+
         // WEARING ANOTHER MESH -- see RS_HandWorldBase.worn. stringArg is
         // "from:to,from:to,*:else", the hand's own pose frames mapped onto the
         // worn mesh's; "" takes it off. The caller puts the mesh on itself

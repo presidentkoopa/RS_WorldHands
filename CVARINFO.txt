@@ -129,16 +129,16 @@ user float rs_hands_blend = 3.5;   // owner's tuned value, baked in 2026-09-15 (
 user bool rs_handworld = true;   // owner's tuned value, baked in 2026-09-15 (was false)
 
 user float rs_hw_main_ofs_x = 0.0;
-user float rs_hw_main_ofs_y = 11.0;   // owner's tuned value, baked in 2026-09-15 (was 0.0)
-user float rs_hw_main_ofs_z = -8.5;   // owner's tuned value, baked in 2026-09-15 (was 0.0)
+user float rs_hw_main_ofs_y = 3.74;   // owner's tuned value, baked in 2026-09-15 (was 0.0)
+user float rs_hw_main_ofs_z = -2.89;   // owner's tuned value, baked in 2026-09-15 (was 0.0)
 user float rs_hw_main_yaw   = 0.0;
 user float rs_hw_main_pitch = 0.0;
 user float rs_hw_main_roll  = -8.0;   // owner's tuned value, baked in 2026-09-15 (was 0.0)
 user float rs_hw_main_scale = 1.0;
 
 user float rs_hw_off_ofs_x = 0.0;
-user float rs_hw_off_ofs_y = 11.0;   // owner's tuned value, baked in 2026-09-15 (was 0.0)
-user float rs_hw_off_ofs_z = -8.5;   // owner's tuned value, baked in 2026-09-15 (was 0.0)
+user float rs_hw_off_ofs_y = 3.74;   // owner's tuned value, baked in 2026-09-15 (was 0.0)
+user float rs_hw_off_ofs_z = -2.89;   // owner's tuned value, baked in 2026-09-15 (was 0.0)
 user float rs_hw_off_yaw   = 0.0;
 user float rs_hw_off_pitch = 0.0;
 user float rs_hw_off_roll  = 0.0;
@@ -246,7 +246,7 @@ user int rs_grab_scale_space = 1;
 // considerably taller -- a reach along the fingers rather than a flat disc.
 user float rs_grab_m_ofs_x = 0.0;
 user float rs_grab_m_ofs_y = 0.0;   // owner's tuned value, baked in 2026-09-15 (was 0.25)
-user float rs_grab_m_ofs_z = -100.0;   // owner's tuned value, baked in 2026-09-15 (was -0.75)
+user float rs_grab_m_ofs_z = -34.0;   // owner's tuned value, baked in 2026-09-15 (was -0.75)
 user float rs_grab_m_yaw = 0.0;
 user float rs_grab_m_pitch = 0.0;
 user float rs_grab_m_roll = 0.0;
@@ -258,7 +258,7 @@ user float rs_grab_m_scale_z = 3.0;
 
 user float rs_grab_o_ofs_x = 0.0;
 user float rs_grab_o_ofs_y = 0.0;   // owner's tuned value, baked in 2026-09-15 (was 0.25)
-user float rs_grab_o_ofs_z = -100.0;   // owner's tuned value, baked in 2026-09-15 (was -0.75)
+user float rs_grab_o_ofs_z = -34.0;   // owner's tuned value, baked in 2026-09-15 (was -0.75)
 user float rs_grab_o_yaw = 0.0;
 user float rs_grab_o_pitch = 0.0;
 user float rs_grab_o_roll = 0.0;
@@ -852,8 +852,8 @@ user int   rs_stab_cfgver = 0;
 // (the engine's GRIPSUBJ_* numbering, constants.zs).
 user int   rs_stab_subject = 0;
 user float rs_stab_ofs_x = 0.0;
-user float rs_stab_ofs_y = 2.2;
-user float rs_stab_ofs_z = -0.4;
+user float rs_stab_ofs_y = 0.748;
+user float rs_stab_ofs_z = -0.136;
 user float rs_stab_yaw = 0.0;
 user float rs_stab_pitch = 0.0;
 user float rs_stab_roll = 0.0;

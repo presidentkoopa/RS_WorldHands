@@ -578,17 +578,15 @@ class RS_Pull : EventHandler
 		flySavedRadius[hand]     = a.Radius;
 		flySavedHeight[hand]     = a.Height;
 
-		// SPECIAL IS LEFT ALONE, and that is the whole design in one line.
+		// SPECIAL GOES OFF FOR THE FLIGHT. It used to be left on, back when a
+		// missed catch resolved as a pickup; Impact now just drops a miss, so a
+		// live SPECIAL only did harm. The arc homes to your palm, which is inside
+		// your own collision cylinder, so near a hip holster the item was collected
+		// MID-AIR -- and the flight then went on steering an item you now owned.
+		// Every exit (Catch, Abort, Impact) puts the saved value back.
+		a.bSPECIAL = false;
 		//
-		// Holding an object clears it, because an item inside your own collision
-		// cylinder would be collected every tic. Flight is the opposite case: an
-		// object crossing the room at you SHOULD resolve if it reaches you.
-		// Missing a catch is not a dropped ball -- it is the medikit hitting you
-		// and healing you, the ammo box hitting you and giving you ammo, the
-		// barrel hitting you and hurting. There is no outcome where you flicked
-		// something and nothing happened.
-		//
-		// NOGRAVITY still goes on: the arc is authored, and gravity fighting it
+		// NOGRAVITY goes on too: the arc is authored, and gravity fighting it
 		// mid-flight would drag every pull into the floor.
 		a.bNOGRAVITY = true;
 
@@ -697,6 +695,10 @@ class RS_Pull : EventHandler
 		let rule = pol ? pol.Decide(a, pmo, p) : null;
 		if (!held || !rule) return false;
 
+		// The flight's hold on this hand ends here, BEFORE the handover, so
+		// RS_Held's own claim for the same hand is granted rather than refused.
+		ReleaseHand(hand, pmo);
+
 		a.bSPECIAL    = flySavedSpecial[hand];
 		a.bNOGRAVITY  = flySavedNoGrav[hand];
 		a.bTHRUACTORS = flySavedThruActors[hand];
@@ -796,7 +798,55 @@ class RS_Pull : EventHandler
 		}
 		flyActor[hand] = null;
 		flyHold[hand]  = 0;
+		let p = players[consoleplayer];
+		if (p) ReleaseHand(hand, p.mo);
 		if (a) RS_GrabPolicy.Tell(why, hand, a, true);
+	}
+
+	// ---- the grip arbiter -------------------------------------------------
+	//
+	// A FLIGHT HOLDS ITS HAND. While something is flying to a hand, that hand's
+	// grip is spoken for: a press there is the catch, not a holster draw or a
+	// store. Claimed in the shared arbiter so every consumer that asks
+	// "grip.held" (the holsters do, body_holsters.zs handFree) stands down on its
+	// own, with no package naming another. Renewed every flight tic; released on
+	// every exit, and released before Catch hands over so RS_Held's claim wins.
+	//
+	// The lookup is copied from rs_held.zs on purpose -- see the note there on
+	// why a shared helper would be a compile-time dependency.
+	private Service arbiter;
+	private int     arbWait;
+
+	const PULL_ARB_RETRY = 350;   // ~10s at 35Hz; a miss re-checks, a hit does not
+	const PULL_ARB_IDENT = 1;     // the arbiter's frozen IDENTITY, never its PROTOCOL
+
+	private void ArbiterFind()
+	{
+		if (arbiter) return;
+		if (arbWait > 0) { arbWait--; return; }
+
+		ServiceIterator it = ServiceIterator.Find("RS_GripArbiterService");
+		Service s;
+		while (s = it.Next())
+		{
+			if (s.GetInt("grip.hello", "", 0, 0, null, 'None') != PULL_ARB_IDENT)
+				continue;
+			arbiter = s;
+			break;
+		}
+		if (!arbiter) arbWait = PULL_ARB_RETRY;
+	}
+
+	private void ClaimHand(int hand, PlayerPawn pmo)
+	{
+		if (arbiter && pmo) arbiter.GetInt("grip.claim", "", hand, GRIPSUBJ_None, pmo, 'RS_Pull');
+	}
+
+	// Only ever releases our own claim (the arbiter refuses anything else), so it
+	// is safe on every cleanup path, flying or not.
+	private void ReleaseHand(int hand, PlayerPawn pmo)
+	{
+		if (arbiter && pmo) arbiter.GetInt("grip.release", "", hand, 0, pmo, 'RS_Pull');
 	}
 
 	void AbortAll()
@@ -840,6 +890,7 @@ class RS_Pull : EventHandler
 
 		ValidateLock(0, pmo, p);
 		ValidateLock(1, pmo, p);
+		ArbiterFind();
 
 		let held = RS_Held.Get();
 
@@ -850,7 +901,25 @@ class RS_Pull : EventHandler
 			// crushed or consumed mid-flight clears its own slot. The saved
 			// flags do not, and a stale pair of those is what the NEXT pull
 			// would hand to RS_Held.
-			if (!a) { if (flyTic[h] != 0) { flyTic[h] = 0; flyHold[h] = 0; } continue; }
+			if (!a) { if (flyTic[h] != 0) { flyTic[h] = 0; flyHold[h] = 0; ReleaseHand(h, pmo); } continue; }
+
+			// ALREADY SOMEONE'S. If anything gave the item an owner mid-flight,
+			// the flight is over: steering an owned item moves it around inside
+			// an inventory. The flight's flags are NOT put back -- becoming an
+			// item set its own -- only the purely cosmetic tumble.
+			let inv = Inventory(a);
+			if (inv && inv.Owner)
+			{
+				RestoreTumble(h, a);
+				flyActor[h] = null;
+				flyTic[h]   = 0;
+				flyHold[h]  = 0;
+				ReleaseHand(h, pmo);
+				RS_GrabPolicy.Tell("pull.aborted", h, a, true);
+				continue;
+			}
+
+			ClaimHand(h, pmo);
 
 			flyTic[h]++;
 			double t = double(flyTic[h]) / double(flyTotal[h]);
@@ -1084,6 +1153,7 @@ class RS_Pull : EventHandler
 	{
 		flyActor[h] = null;
 		flyHold[h]     = 0;
+		ReleaseHand(h, pmo);
 		a.bSPECIAL    = flySavedSpecial[h];
 		a.bNOGRAVITY  = flySavedNoGrav[h];
 		// Put back BEFORE the resolve below. Impact is where a missed pull

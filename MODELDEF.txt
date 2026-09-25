@@ -216,8 +216,8 @@ Model RS_HandWorldMain
 	// scale, which stays on the Scale line where it belongs.
 	//
 	// Scale stayed at slider 1.0, so the derived 0.01 was right and is unchanged.
-	Scale -1.0 1.0 1.0
-	Offset 0.0 0.1 -0.05
+	Scale -0.34 0.34 0.34
+	Offset 0.0 0.034 -0.017
 	AngleOffset 0.0
 	PitchOffset 90.0
 	RollOffset -90.0
@@ -259,8 +259,8 @@ Model RS_HandWorldOff
 	// scale, which stays on the Scale line where it belongs.
 	//
 	// Scale stayed at slider 1.0, so the derived 0.01 was right and is unchanged.
-	Scale 1.0 1.0 1.0
-	Offset 0.0 0.1 -0.05
+	Scale 0.34 0.34 0.34
+	Offset 0.0 0.034 -0.017
 	AngleOffset 0.0
 	PitchOffset 90.0
 	RollOffset -90.0
@@ -303,7 +303,7 @@ Model RS_GrabOvalMain
 	// axis here, because it multiplies the same matrix component _ofs_x
 	// translates and vr_hand_ofs_x is captioned "Left / Right". The script test
 	// had x on forward until 2026-08-26.
-	Scale 100.0 100.0 100.0
+	Scale 34.0 34.0 34.0
 	PlacementCVars rs_grab_m
 	FollowMainHand
 	FrameIndex RSGB A 0 0
@@ -328,7 +328,7 @@ Model RS_GrabOvalOff
 	Path "models"
 	Model 0 "rs_wiresphere.obj"
 	Skin  0 "rs_grab_idle.png"
-	Scale 100.0 100.0 100.0
+	Scale 34.0 34.0 34.0
 	PlacementCVars rs_grab_o
 	FollowOffHand
 	FrameIndex RSGB A 0 0
@@ -348,7 +348,7 @@ Model RS_StabOval
 	Path "models"
 	Model 0 "rs_wiresphere.obj"
 	Skin  0 "rs_vol_idle.png"
-	Scale 100.0 100.0 100.0
+	Scale 34.0 34.0 34.0
 	PlacementCVars rs_stab
 	FollowMainHand
 	FrameIndex RSGB A 0 0
