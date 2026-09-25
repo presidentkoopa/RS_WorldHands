@@ -3,9 +3,21 @@
 __pycache__/
 *.bak
 
-# Ermac's glove (Rusted Legacy, MIT) -- kept on disk and in the built pk3, not pushed to GitHub,
-# the same rule as the Slayer and Ermac binaries elsewhere (build lane, 2026-09-14).
-models/hands/hand_ermac.iqm
-models/hands/hand_ermac.png
-# The RS hand with Ermac's fitted poses in it (frames 1298+): derived from his hand2/hand.md3, kept off GitHub too.
-models/hands/hand_left_poses.iqm
+# THE HAND MODEL THE GAME LOADS IS TRACKED (2026-09-25).
+#
+# hand_left_poses.iqm used to be ignored, together with the Ermac glove, because
+# both are derived from iAmErmac's work (Rusted Legacy, MIT) and this repo has a
+# GitHub remote. The glove is gone now -- its weights were never cleaned up after
+# the transfer and the fingers fused the moment a joint turned -- so those two
+# lines are dead.
+#
+# hand_left_poses.iqm is NOT dead: it is the model MODELDEF actually loads, 1705
+# frames, and ignoring it meant the hand every player wears had no backup in
+# version control. hand_left.iqm (1298 frames) was tracked, so losing the live one
+# meant rebuilding it through the whole chain -- Blender bake from hand_final.fbx,
+# append two poses, splice Ermac's frames back on. That is not a backup.
+#
+# The licence is MIT, so what it asks for is attribution, not exclusion, and the
+# credit is already in the build script and in tools/README.md. Pushing this repo
+# now publishes the model; that is a decision about a push, not a reason to leave
+# the asset unbacked.
