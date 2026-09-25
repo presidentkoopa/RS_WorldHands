@@ -37,6 +37,8 @@ class RS_HandIdle : Inventory
 		// state's sprite and frame, so the placeholder state below never
 		// needs a real sprite.
 		+DECOUPLEDANIMATIONS
+		// [EXCISED 2026-09-25] no hand mesh is drawn -- see handworld.zs.
+		+INVISIBLE
 	}
 	States
 	{

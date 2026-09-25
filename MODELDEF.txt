@@ -97,35 +97,49 @@
 // TO REVERT: put hand_left.iqm / hand_basecolor.png back on the four Model / Skin
 // lines below (both files are still here), or git checkout pre-ermac-hands. The
 // glove before the poses is in _backups/hands-before-gunposes-20260915-000057.
-Model RS_HandIdleMain
-{
-	Path "models/hands"
-	Model 0 "hand_left_poses.iqm"
-	Skin 0 "hand_basecolor.png"
-	Scale -1.0 1.0 1.0
-	Offset 0.0 -18.0 -12.0
-	UseHandOffsets
-	NOAUTOREVERSE
-	PitchOffset 90.0
-	RollOffset 0.0
-	AngleOffset 0.0
-	BaseFrame
-}
+// ===========================================================================
+// [EXCISED 2026-09-25] ALL FOUR HAND MODELDEF BLOCKS ARE COMMENTED OUT BELOW.
+//
+// On the owner's instruction: the hand meshes went to _old with every body, arm
+// and IK attempt. No hand is drawn now.
+//
+// THE CODE IS UNTOUCHED AND MUST STAY THAT WAY. The hand ACTORS still spawn,
+// still ride the controllers and still grab, pull and throw -- that part works
+// and is the only part that ever did. They carry +INVISIBLE instead of a model.
+//
+// Do not uncomment these to "see something". The meshes are not in the pk3.
+// See _old/DO_NOT_USE.md.
+// ===========================================================================
 
-Model RS_HandIdleOff
-{
-	Path "models/hands"
-	Model 0 "hand_left_poses.iqm"
-	Skin 0 "hand_basecolor.png"
-	Scale 1.0 1.0 1.0
-	Offset 0.0 -18.0 -12.0
-	NOAUTOREVERSE
-	UseHandOffsets
-	PitchOffset 90.0
-	RollOffset 0.0
-	AngleOffset 0.0
-	BaseFrame
-}
+// Model RS_HandIdleMain
+// {
+// 	Path "models/hands"
+// 	Model 0 "hand_left_poses.iqm"
+// 	Skin 0 "hand_basecolor.png"
+// 	Scale -1.0 1.0 1.0
+// 	Offset 0.0 -18.0 -12.0
+// 	UseHandOffsets
+// 	NOAUTOREVERSE
+// 	PitchOffset 90.0
+// 	RollOffset 0.0
+// 	AngleOffset 0.0
+// 	BaseFrame
+// }
+
+// Model RS_HandIdleOff
+// {
+// 	Path "models/hands"
+// 	Model 0 "hand_left_poses.iqm"
+// 	Skin 0 "hand_basecolor.png"
+// 	Scale 1.0 1.0 1.0
+// 	Offset 0.0 -18.0 -12.0
+// 	NOAUTOREVERSE
+// 	UseHandOffsets
+// 	PitchOffset 90.0
+// 	RollOffset 0.0
+// 	AngleOffset 0.0
+// 	BaseFrame
+// }
 
 
 // ===========================================================================
@@ -183,91 +197,91 @@ Model RS_HandIdleOff
 // the sign renders the main hand inside out.
 // ===========================================================================
 
-Model RS_HandWorldMain
-{
-	Path "models/hands"
-	Model 0 "hand_left_poses.iqm"
-	PlacementCVars rs_hw_main
-	// SKIN IS LOAD-BEARING, AND ITS ABSENCE IS SILENT.
-	// IQMModel::RenderFrame (models_iqm.cpp:521-537) resolves a mesh skin in three
-	// steps -- MODELDEF Skin, then SurfaceSkin, then the material name baked into
-	// the IQM -- and if all three miss it hits "continue" and SKIPS THE MESH. Not a
-	// white model, not a warning: no draw at all, nothing in the log.
-	// hand_left.iqm names its material "aiStandardSurface1", a Maya default that
-	// exists nowhere in this pk3, so these two blocks drew nothing from the day they
-	// were written. Both psprite blocks above always carried a Skin, which is why
-	// only the world hands were affected.
-	Skin 0 "hand_basecolor.png"
+// Model RS_HandWorldMain
+// {
+// 	Path "models/hands"
+// 	Model 0 "hand_left_poses.iqm"
+// 	PlacementCVars rs_hw_main
+// 	// SKIN IS LOAD-BEARING, AND ITS ABSENCE IS SILENT.
+// 	// IQMModel::RenderFrame (models_iqm.cpp:521-537) resolves a mesh skin in three
+// 	// steps -- MODELDEF Skin, then SurfaceSkin, then the material name baked into
+// 	// the IQM -- and if all three miss it hits "continue" and SKIPS THE MESH. Not a
+// 	// white model, not a warning: no draw at all, nothing in the log.
+// 	// hand_left.iqm names its material "aiStandardSurface1", a Maya default that
+// 	// exists nowhere in this pk3, so these two blocks drew nothing from the day they
+// 	// were written. Both psprite blocks above always carried a Skin, which is why
+// 	// only the world hands were affected.
+// 	Skin 0 "hand_basecolor.png"
+//
+// 	// PLACEMENT, FOUND IN A HEADSET 2026-08-30 AND FOLDED IN HERE.
+// 	//
+// 	// These are not guesses: they are the rs_hw_*_ofs_* / _pitch / _roll values
+// 	// that were dialled in on the sliders until the mesh sat correctly on the
+// 	// controller, transferred verbatim. That transfer is exact rather than
+// 	// approximate -- ObjectToWorldMatrix sums the slider into the SAME translate
+// 	// and rotate calls as these fields (models.cpp:855-861), which is the whole
+// 	// reason the placement cvars were built to fold in rather than apply after.
+// 	//
+// 	// So the sliders go back to zero and nothing moves. Anyone tuning from here
+// 	// starts from neutral instead of from someone else's correction.
+// 	//
+// 	// Both hands take the SAME numbers. They are one mesh mirrored on X, and a
+// 	// mirror does not change which way is forward or up -- only the sign of the
+// 	// scale, which stays on the Scale line where it belongs.
+// 	//
+// 	// Scale stayed at slider 1.0, so the derived 0.01 was right and is unchanged.
+// 	Scale -0.34 0.34 0.34
+// 	Offset 0.0 0.034 -0.017
+// 	AngleOffset 0.0
+// 	PitchOffset 90.0
+// 	RollOffset -90.0
+// 	NOAUTOREVERSE
+// 	FollowMainHand
+// 	BaseFrame
+// }
 
-	// PLACEMENT, FOUND IN A HEADSET 2026-08-30 AND FOLDED IN HERE.
-	//
-	// These are not guesses: they are the rs_hw_*_ofs_* / _pitch / _roll values
-	// that were dialled in on the sliders until the mesh sat correctly on the
-	// controller, transferred verbatim. That transfer is exact rather than
-	// approximate -- ObjectToWorldMatrix sums the slider into the SAME translate
-	// and rotate calls as these fields (models.cpp:855-861), which is the whole
-	// reason the placement cvars were built to fold in rather than apply after.
-	//
-	// So the sliders go back to zero and nothing moves. Anyone tuning from here
-	// starts from neutral instead of from someone else's correction.
-	//
-	// Both hands take the SAME numbers. They are one mesh mirrored on X, and a
-	// mirror does not change which way is forward or up -- only the sign of the
-	// scale, which stays on the Scale line where it belongs.
-	//
-	// Scale stayed at slider 1.0, so the derived 0.01 was right and is unchanged.
-	Scale -0.34 0.34 0.34
-	Offset 0.0 0.034 -0.017
-	AngleOffset 0.0
-	PitchOffset 90.0
-	RollOffset -90.0
-	NOAUTOREVERSE
-	FollowMainHand
-	BaseFrame
-}
-
-Model RS_HandWorldOff
-{
-	Path "models/hands"
-	Model 0 "hand_left_poses.iqm"
-	PlacementCVars rs_hw_off
-	// SKIN IS LOAD-BEARING, AND ITS ABSENCE IS SILENT.
-	// IQMModel::RenderFrame (models_iqm.cpp:521-537) resolves a mesh skin in three
-	// steps -- MODELDEF Skin, then SurfaceSkin, then the material name baked into
-	// the IQM -- and if all three miss it hits "continue" and SKIPS THE MESH. Not a
-	// white model, not a warning: no draw at all, nothing in the log.
-	// hand_left.iqm names its material "aiStandardSurface1", a Maya default that
-	// exists nowhere in this pk3, so these two blocks drew nothing from the day they
-	// were written. Both psprite blocks above always carried a Skin, which is why
-	// only the world hands were affected.
-	Skin 0 "hand_basecolor.png"
-
-	// PLACEMENT, FOUND IN A HEADSET 2026-08-30 AND FOLDED IN HERE.
-	//
-	// These are not guesses: they are the rs_hw_*_ofs_* / _pitch / _roll values
-	// that were dialled in on the sliders until the mesh sat correctly on the
-	// controller, transferred verbatim. That transfer is exact rather than
-	// approximate -- ObjectToWorldMatrix sums the slider into the SAME translate
-	// and rotate calls as these fields (models.cpp:855-861), which is the whole
-	// reason the placement cvars were built to fold in rather than apply after.
-	//
-	// So the sliders go back to zero and nothing moves. Anyone tuning from here
-	// starts from neutral instead of from someone else's correction.
-	//
-	// Both hands take the SAME numbers. They are one mesh mirrored on X, and a
-	// mirror does not change which way is forward or up -- only the sign of the
-	// scale, which stays on the Scale line where it belongs.
-	//
-	// Scale stayed at slider 1.0, so the derived 0.01 was right and is unchanged.
-	Scale 0.34 0.34 0.34
-	Offset 0.0 0.034 -0.017
-	AngleOffset 0.0
-	PitchOffset 90.0
-	RollOffset -90.0
-	NOAUTOREVERSE
-	FollowOffHand
-	BaseFrame
-}
+// Model RS_HandWorldOff
+// {
+// 	Path "models/hands"
+// 	Model 0 "hand_left_poses.iqm"
+// 	PlacementCVars rs_hw_off
+// 	// SKIN IS LOAD-BEARING, AND ITS ABSENCE IS SILENT.
+// 	// IQMModel::RenderFrame (models_iqm.cpp:521-537) resolves a mesh skin in three
+// 	// steps -- MODELDEF Skin, then SurfaceSkin, then the material name baked into
+// 	// the IQM -- and if all three miss it hits "continue" and SKIPS THE MESH. Not a
+// 	// white model, not a warning: no draw at all, nothing in the log.
+// 	// hand_left.iqm names its material "aiStandardSurface1", a Maya default that
+// 	// exists nowhere in this pk3, so these two blocks drew nothing from the day they
+// 	// were written. Both psprite blocks above always carried a Skin, which is why
+// 	// only the world hands were affected.
+// 	Skin 0 "hand_basecolor.png"
+//
+// 	// PLACEMENT, FOUND IN A HEADSET 2026-08-30 AND FOLDED IN HERE.
+// 	//
+// 	// These are not guesses: they are the rs_hw_*_ofs_* / _pitch / _roll values
+// 	// that were dialled in on the sliders until the mesh sat correctly on the
+// 	// controller, transferred verbatim. That transfer is exact rather than
+// 	// approximate -- ObjectToWorldMatrix sums the slider into the SAME translate
+// 	// and rotate calls as these fields (models.cpp:855-861), which is the whole
+// 	// reason the placement cvars were built to fold in rather than apply after.
+// 	//
+// 	// So the sliders go back to zero and nothing moves. Anyone tuning from here
+// 	// starts from neutral instead of from someone else's correction.
+// 	//
+// 	// Both hands take the SAME numbers. They are one mesh mirrored on X, and a
+// 	// mirror does not change which way is forward or up -- only the sign of the
+// 	// scale, which stays on the Scale line where it belongs.
+// 	//
+// 	// Scale stayed at slider 1.0, so the derived 0.01 was right and is unchanged.
+// 	Scale 0.34 0.34 0.34
+// 	Offset 0.0 0.034 -0.017
+// 	AngleOffset 0.0
+// 	PitchOffset 90.0
+// 	RollOffset -90.0
+// 	NOAUTOREVERSE
+// 	FollowOffHand
+// 	BaseFrame
+// }
 
 
 // ---------------------------------------------------------------------

@@ -245,12 +245,32 @@ class RS_Reach play
         {
             // A worn mesh without a skeleton has no palm bone: its origin is the
             // palm, and asking would print "Could not find bone" every call.
-            let hw = RS_HandWorldBase(hd);
-            Vector3 hb = (0,0,0);
-            if (!hw || !hw.worn) hb = hd.TransformByNamedBone('HANDPALM_joint', (0,0,0));
-            Vector3 pw, pf, pu;
-            [pw, pf, pu] = hd.ModelPointToWorld(hb.x, hb.y, hb.z);
-            if ((pw - pmo.Pos).Length() <= 120) c = pw;
+            // NO MESH IS NOT NO HAND. [2026-09-25]
+            //
+            // Both calls below need a MODELDEF with a BaseFrame, and they do not fail
+            // softly: TransformByNamedBone ABORTS THE VM with "Actor class is missing a
+            // MODELDEF definition or a MODELDEF BaseFrame". With the hand meshes gone the
+            // very first grab tick took the game down on map load.
+            //
+            // The controller position above is already the right answer -- the palm bone
+            // only REFINES it, by the couple of units between the controller and the middle
+            // of the drawn palm. So a hand with no model keeps the controller point and
+            // grabbing works exactly as it did, minus that refinement.
+            //
+            // This is also what makes grab independent of where the hands are drawn at all:
+            // a world mesh, a psprite model, or nothing.
+            if (hd.HasModelFrame())
+            {
+                // A worn mesh without a skeleton has no palm bone: its origin is the
+                // palm, and asking would print "Could not find bone" every call.
+                let hw = RS_HandWorldBase(hd);
+                Vector3 hb = (0,0,0);
+                if ((!hw || !hw.worn) && hd.FindBoneIndex('HANDPALM_joint') >= 0)
+                    hb = hd.TransformByNamedBone('HANDPALM_joint', (0,0,0));
+                Vector3 pw, pf, pu;
+                [pw, pf, pu] = hd.ModelPointToWorld(hb.x, hb.y, hb.z);
+                if ((pw - pmo.Pos).Length() <= 120) c = pw;
+            }
         }
         return c;
     }

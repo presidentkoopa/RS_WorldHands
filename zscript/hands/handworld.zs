@@ -33,6 +33,16 @@ class RS_HandWorldBase : Actor
         // walks a path that was never set up. It took the game down on map load
         // with nothing in the log at all.
         +DECOUPLEDANIMATIONS;
+        // [EXCISED 2026-09-25] NO HAND IS DRAWN. The hand meshes went to _old with every
+        // body, arm and IK attempt, and the four MODELDEF blocks are commented out.
+        //
+        // The ACTOR stays, whole and unchanged: it rides the controller, it grabs, it
+        // pulls and it throws. That is the part that works and it is not being touched.
+        // +INVISIBLE stops the draw only -- the actor still exists, still ticks and is
+        // still what everything else talks to.
+        //
+        // Remove this flag only when there is a hand mesh to draw again.
+        +INVISIBLE;
         Radius 1;
         Height 1;
         RenderStyle "Normal";
