@@ -1104,6 +1104,9 @@ user float rs_hold_sag = 1.0;
 // How far the heaviest thing droops below the palm, in map units.
 user float rs_hold_sag_max = 3.0;
 
-// The furthest a heavy object may trail behind a moving hand, in map units.
-// Capped hard: an object that leaves the hand is a bug, not a feeling.
-user float rs_hold_lag_max = 4.0;
+// How much FURTHER a heavy object dips while the hand is swinging, on top of
+// the resting droop above. Magnitude only, straight down: FollowHandOfs is a
+// MODEL-LOCAL offset, not a world one, so a sideways lag taken from a world
+// velocity would send a held object off along whatever direction the mesh's
+// own axes point. Speed carries the weight here; direction stays fixed.
+user float rs_hold_dip_max = 4.0;

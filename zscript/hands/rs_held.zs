@@ -1194,22 +1194,33 @@ class RS_Held : EventHandler
 	//
 	// A held object is drawn on the controller transform by the engine, which
 	// means it tracks the hand PERFECTLY -- and perfect tracking is what makes
-	// a barrel feel like a balloon. Nothing about carrying one is different
-	// from carrying a clip except a number nobody can see.
+	// a barrel feel like a balloon. Nothing about carrying one differs from
+	// carrying a clip except a number nobody can see.
 	//
-	// So a heavy thing sags, and lags. The sag is a constant droop under its
-	// own weight; the lag is the object trailing where the hand WAS rather than
-	// where it is. Both come off RS_Mass, both are small, and both are bounded
-	// hard -- an object that leaves the hand entirely is a bug, not a feeling.
+	// So a heavy thing hangs lower, and dips further when you swing it.
 	//
-	// PRESENTATION, AND LOCAL. FollowHandOfs is a render offset: it moves where
-	// the model is DRAWN and touches nothing the playsim reads, so a machine
-	// that draws it differently is not a machine that disagrees. Written for
-	// the console player only, because the hand it describes is the only hand
-	// this machine actually has a controller for -- the same rule the pose
-	// hold a few hundred lines up follows.
+	// THE FRAME IS THE MODEL'S OWN, AND THAT IS WHY THERE IS NO SIDEWAYS LAG.
 	//
-	// The offset is in the hand's own frame, so -Z is "down from the palm".
+	// The first version of this trailed the object behind the hand's motion,
+	// using the hand velocity straight from the engine ring. That is a WORLD
+	// vector, and FollowHandOfs is not a world offset: models.cpp sums it with
+	// MODELDEF's own Offset and the placement sliders and applies it as a
+	// translate BEFORE the model rotations, in the model's local frame, with Z
+	// additionally divided by pixelstretch. Feeding it a world velocity would
+	// have sent a held object darting off in whatever direction the mesh's
+	// local axes happened to point -- a visible bug, and a worse one than not
+	// having the feature.
+	//
+	// So the DIRECTION is fixed and local -- down, in the only sense this frame
+	// has -- and the hand's SPEED modulates the magnitude instead. A heavy
+	// thing dips when you swing it and settles when you stop, which is the half
+	// of the lag that actually reads as weight, and it cannot point the wrong
+	// way because it only ever points one way.
+	//
+	// PRESENTATION, AND LOCAL. FollowHandOfs moves where the model is DRAWN and
+	// nothing in the playsim reads it, so a machine that draws it differently is
+	// not a machine that disagrees. Written for the console player only: the
+	// hand it describes is the only one this machine has a controller for.
 	private void HoldSag(int pnum, PlayerPawn pmo, PlayerInfo p, int hand, Actor a)
 	{
 		if (pnum != consoleplayer) return;   // presentation, see above
@@ -1218,28 +1229,26 @@ class RS_Held : EventHandler
 		double amount = Num("rs_hold_sag", p, 1.0);
 		if (amount <= 0) { a.FollowHandOfs = (0, 0, 0); return; }
 
-		// The same logarithmic order the haptic uses, for the same reason: what
-		// reads is the ORDER of weights, not the ratio.
-		double kg  = RS_Mass.Kg(a);
+		// The same logarithmic order the strain haptic uses, and for the same
+		// reason: what reads is the ORDER of weights -- clip, medikit, shield,
+		// barrel -- not the ratio between them.
+		double kg    = RS_Mass.Kg(a);
 		double heavy = clamp(log10(max(kg, 0.0) + 1.0) / 1.8, 0.0, 1.0);
 
-		// SAG: straight down, up to rs_hold_sag_max units at the heaviest.
-		double droop = heavy * Num("rs_hold_sag_max", p, 3.0) * amount;
-
-		// LAG: the object trails the hand's own motion. Asked of the engine
-		// ring rather than differenced here, because that is the one place the
-		// hand's velocity exists at render rate and in the right units. Zero on
-		// a desktop, which is correct -- there is no hand to lag behind.
-		Vector3 trail = (0, 0, 0);
+		// HOW HARD IT IS BEING SWUNG. Magnitude only: a speed has no frame to
+		// get wrong. Zero on a desktop, which is correct -- there is no hand.
+		double swing = 0;
 		if (RS_Reach.Flag("rs_throw_engine", p, true))
 		{
-			Vector3 hv = level.HandVelAtPoint(hand, (0, 0, 0), RS_HAND_NOW) / TICRATE;
-			double cap = Num("rs_hold_lag_max", p, 4.0);
-			trail = -hv * heavy * amount;
-			if (trail.Length() > cap) trail = trail / trail.Length() * cap;
+			Vector3 hv = level.HandVelAtPoint(hand, (0, 0, 0), RS_HAND_NOW);
+			swing = clamp(hv.Length() / TICRATE / 6.0, 0.0, 1.0);
 		}
 
-		a.FollowHandOfs = (trail.x, trail.y, trail.z - droop);
+		double droop = heavy * amount
+		             * (Num("rs_hold_sag_max", p, 3.0)
+		                + swing * Num("rs_hold_dip_max", p, 4.0));
+
+		a.FollowHandOfs = (0, 0, -droop);
 	}
 
 	private bool ShouldBreak(PlayerPawn pmo, PlayerInfo p, int hand, Actor a)
