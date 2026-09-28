@@ -1190,6 +1190,58 @@ class RS_Held : EventHandler
 	// through the level the moment a gap appears. The distance is the same
 	// number in the menu, so a break that fires too eagerly is tunable rather
 	// than a rebuild.
+	// ---- WHAT HEAVY LOOKS LIKE -----------------------------------------------
+	//
+	// A held object is drawn on the controller transform by the engine, which
+	// means it tracks the hand PERFECTLY -- and perfect tracking is what makes
+	// a barrel feel like a balloon. Nothing about carrying one is different
+	// from carrying a clip except a number nobody can see.
+	//
+	// So a heavy thing sags, and lags. The sag is a constant droop under its
+	// own weight; the lag is the object trailing where the hand WAS rather than
+	// where it is. Both come off RS_Mass, both are small, and both are bounded
+	// hard -- an object that leaves the hand entirely is a bug, not a feeling.
+	//
+	// PRESENTATION, AND LOCAL. FollowHandOfs is a render offset: it moves where
+	// the model is DRAWN and touches nothing the playsim reads, so a machine
+	// that draws it differently is not a machine that disagrees. Written for
+	// the console player only, because the hand it describes is the only hand
+	// this machine actually has a controller for -- the same rule the pose
+	// hold a few hundred lines up follows.
+	//
+	// The offset is in the hand's own frame, so -Z is "down from the palm".
+	private void HoldSag(int pnum, PlayerPawn pmo, PlayerInfo p, int hand, Actor a)
+	{
+		if (pnum != consoleplayer) return;   // presentation, see above
+		if (!a || a.FollowHandMode == 0) return;
+
+		double amount = Num("rs_hold_sag", p, 1.0);
+		if (amount <= 0) { a.FollowHandOfs = (0, 0, 0); return; }
+
+		// The same logarithmic order the haptic uses, for the same reason: what
+		// reads is the ORDER of weights, not the ratio.
+		double kg  = RS_Mass.Kg(a);
+		double heavy = clamp(log10(max(kg, 0.0) + 1.0) / 1.8, 0.0, 1.0);
+
+		// SAG: straight down, up to rs_hold_sag_max units at the heaviest.
+		double droop = heavy * Num("rs_hold_sag_max", p, 3.0) * amount;
+
+		// LAG: the object trails the hand's own motion. Asked of the engine
+		// ring rather than differenced here, because that is the one place the
+		// hand's velocity exists at render rate and in the right units. Zero on
+		// a desktop, which is correct -- there is no hand to lag behind.
+		Vector3 trail = (0, 0, 0);
+		if (RS_Reach.Flag("rs_throw_engine", p, true))
+		{
+			Vector3 hv = level.HandVelAtPoint(hand, (0, 0, 0), RS_HAND_NOW) / TICRATE;
+			double cap = Num("rs_hold_lag_max", p, 4.0);
+			trail = -hv * heavy * amount;
+			if (trail.Length() > cap) trail = trail / trail.Length() * cap;
+		}
+
+		a.FollowHandOfs = (trail.x, trail.y, trail.z - droop);
+	}
+
 	private bool ShouldBreak(PlayerPawn pmo, PlayerInfo p, int hand, Actor a)
 	{
 		double brk = Num("rs_hold_break", p, 40.0);
@@ -1215,12 +1267,25 @@ class RS_Held : EventHandler
 		// of only at the limit costs one call and turns a silent failure into a
 		// warning you can feel.
 		//
-		// SCALED BY SIZE, using the collision cylinder every other hand
-		// mechanism already reads, so a corpse drags limp and a barrel fights
-		// you. Radius*Height rather than mass because Doom actors have no mass
-		// -- and the barrel is 16x32 while a medikit is 20x16, which is close
-		// enough to right that inventing a mass table would be a worse answer
-		// than the number already on the actor.
+		// SCALED BY MASS, AND THE REASON IT WAS NOT IS GONE.
+		//
+		// This used to read Radius*Height, and said so: "Doom actors have no
+		// mass, and inventing a mass table would be a worse answer than the
+		// number already on the actor." That was correct when it was written
+		// and it is not correct now -- RS_Mass exists, MASSDEF ships the
+		// vanilla numbers, and it is the same table the throw already weighs
+		// things against.
+		//
+		// It also fixes a case the old proxy got backwards. A barrel is 16x32
+		// and a medikit 20x16, so by bounding box the MEDIKIT is the heavier
+		// of the two: 320 against 512, but only because the barrel is narrow.
+		// By mass it is 1.5 kg against 60. The hand should not have to be told
+		// which of those is heavier.
+		//
+		// LOGARITHMIC, because a barrel is four hundred times a clip and a
+		// controller has one motor. What the player needs is an ORDER -- clip,
+		// medikit, shield, barrel, each noticeably heavier than the last -- not
+		// a linear ratio that pins everything above a few kilos to maximum.
 		//
 		// NORMALISED AGAINST THE BREAK DISTANCE so it reaches full strength
 		// exactly as the hold is about to fail, whatever that distance is tuned
@@ -1231,10 +1296,11 @@ class RS_Held : EventHandler
 			double strain = gap / brk;
 			if (strain > 0.15)
 			{
-				// Cheap size proxy, capped: a big prop should feel heavier than
-				// a small one, but a mod's oversized actor must not be able to
-				// ask for an intensity the runtime never expected.
-				double bulk = clamp((a.Radius * a.Height) / 512.0, 0.5, 2.0);
+				// Capped at both ends: a mod's 900 kg prop must not be able to
+				// ask for an intensity the runtime never expected, and nothing
+				// is so light that it vanishes.
+				double kg   = RS_Mass.Kg(a);
+				double bulk = clamp(0.5 + log10(max(kg, 0.0) + 1.0) * 0.9, 0.5, 2.0);
 				double amp  = clamp(strain * buzz * bulk, 0.0, 1.0);
 
 				// Short and re-issued every tic rather than one long buzz: the
@@ -1380,6 +1446,9 @@ class RS_Held : EventHandler
 			// because the object sits at the primary palm -- so pulling your
 			// hands apart takes the second one off it, which is what pulling
 			// your hands apart means.
+			// How heavy it LOOKS, every tic, beside how heavy it feels.
+			HoldSag(pnum, pmo, p, h, a);
+
 			if (ShouldBreak(pmo, p, h, a))
 			{
 				if (Flag("rs_hand_debug", p, true))

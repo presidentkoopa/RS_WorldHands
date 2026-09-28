@@ -1021,7 +1021,25 @@ class RS_GrabHandler : EventHandler
                 continue;
             }
 
-            nearTarget[hand] = RS_Reach.Best(pmo, p, hand);
+            // A CATCH BEATS A REACH, and is tried first for that reason.
+            //
+            // Something already in the air is the thing the player is looking
+            // at and moving towards; offering them the crate by their foot
+            // instead, because it happens to be inside the reach oval, is how
+            // you end up holding the wrong object and watching the right one
+            // go past. RS_Pull's own flights take the same precedence a few
+            // lines above, for the same reason.
+            //
+            // The radius is its own, and larger: a thrown object crosses a
+            // hand-sized volume in about two tics, and no one can shut their
+            // fingers inside that.
+            Actor inAir = RS_Flight.CatchableAt(
+                RS_Reach.Palm(pmo, p, hand),
+                RS_Reach.Num("rs_catch_radius", p, 12.0),
+                pmo,
+                int(RS_Reach.Num("rs_catch_guard", p, 6)));
+            if (inAir) { nearTarget[hand] = inAir; }
+            else       { nearTarget[hand] = RS_Reach.Best(pmo, p, hand); }
             // Not something RS_Pull is flying or holding for the OTHER hand.
             // Taking it here would SaveFlags the flight's fiction (no gravity,
             // thru-actors, rolled) as the object's real state and leave two

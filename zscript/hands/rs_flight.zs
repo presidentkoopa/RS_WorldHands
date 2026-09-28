@@ -175,6 +175,56 @@ class RS_Flight : EventHandler
 		return (f.fVelX[i], f.fVelY[i], f.fVelZ[i]);
 	}
 
+	// ---- CATCHING ------------------------------------------------------------
+	//
+	// The nearest thing in the air to a given point, or null. Everything about
+	// WHERE a hand is stays out of here: this takes a position and a radius and
+	// answers a question about the flight list, which is the only part a
+	// machine without a controller can also agree on.
+	//
+	// WHY A SEPARATE RADIUS FROM AN ORDINARY GRAB. A thrown object crosses a
+	// hand-sized reach volume in about two tics. Asking the player to close
+	// their fingers inside that window is asking them to do something nobody
+	// can do, and it reads as the catch being broken rather than as being
+	// fast. So a thing in flight is catchable from further out, and the reach
+	// test does not apply to it at all.
+	//
+	// YOU CANNOT CATCH YOUR OWN THROW, for a moment. Without this, the same
+	// held grip that released an object takes it straight back on the next tic
+	// and it never leaves the hand -- and the player cannot tell whether they
+	// threw it, because from the inside nothing happened. The guard runs from
+	// the LAUNCH, so it is the same count on every machine.
+	//
+	// A teammate's throw has no such guard, and needs none: catching what
+	// someone else threw you is the whole point.
+	static Actor CatchableAt(Vector3 point, double radius, Actor catcher, int guardTics)
+	{
+		let f = Get();
+		if (!f) return null;
+
+		let held = RS_Held.Get();
+		Actor best = null;
+		double bestD = radius * radius;
+
+		for (int i = 0; i < f.fActor.Size(); i++)
+		{
+			Actor a = f.fActor[i];
+			if (!a || a.bDESTROYED) continue;
+			if (catcher && f.fThrower[i] == catcher && f.fTics[i] <= guardTics) continue;
+
+			// Held by somebody already -- a second hand arriving on an object
+			// in flight is a grab, not a catch, and RS_Held decides that.
+			// IsHeld, not IsHeldBy: a barrel in a REMOTE player's hands must
+			// not read as free here either.
+			if (held && held.IsHeld(a)) continue;
+
+			Vector3 d = a.Pos - point;
+			double dd = d dot d;
+			if (dd < bestD) { bestD = dd; best = a; }
+		}
+		return best;
+	}
+
 	static Actor ThrowerOf(Actor a)
 	{
 		let f = Get();

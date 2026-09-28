@@ -1066,3 +1066,44 @@ user bool rs_throw_engine = true;
 // Applied on the SENDER and baked into what travels, so it is safe as a
 // per-player preference.
 user float rs_throw_wrist = 1.0;
+
+// ---- CATCHING WHAT IS IN THE AIR (added 2026-09-28) -----------------------
+
+// How close a hand has to be to something in flight to take it, in map units.
+// Its own number, and bigger than an ordinary grab's reach, because a thrown
+// object crosses a hand-sized volume in about two tics -- asking the player to
+// close their fingers inside that window is asking for something nobody can
+// do, and it reads as the catch being broken rather than as being fast.
+//
+// USER, not server, and that is safe: this only decides which object the LOCAL
+// machine offers its own hand. The take itself travels as a command and every
+// machine applies the same one.
+user float rs_catch_radius = 12.0;
+
+// Tics after your own release before your own hand can take it back. Without
+// it the held grip that threw the object catches it again on the next tic and
+// it never leaves your hand -- and you cannot tell why, because from the
+// inside nothing happened. Counted from the launch, so it is the same number
+// everywhere. Somebody else's throw has no guard and needs none.
+user int rs_catch_guard = 6;
+
+// ---- WHAT HEAVY LOOKS LIKE (added 2026-09-28) -----------------------------
+//
+// A held object is drawn on the controller transform, so it tracks the hand
+// perfectly -- and perfect tracking is what makes a barrel feel like a
+// balloon. These make a heavy thing droop under its own weight and trail
+// behind the hand's motion, off the same RS_Mass table the throw uses.
+//
+// PURELY VISUAL. FollowHandOfs moves where the model is DRAWN and nothing in
+// the playsim reads it, which is why these can be user cvars at all.
+
+// Master dial. 0 switches it off and pins the object rigidly to the hand,
+// which is how it behaved before this existed.
+user float rs_hold_sag = 1.0;
+
+// How far the heaviest thing droops below the palm, in map units.
+user float rs_hold_sag_max = 3.0;
+
+// The furthest a heavy object may trail behind a moving hand, in map units.
+// Capped hard: an object that leaves the hand is a bug, not a feeling.
+user float rs_hold_lag_max = 4.0;
