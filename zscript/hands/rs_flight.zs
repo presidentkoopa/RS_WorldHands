@@ -91,6 +91,8 @@ class RS_Flight : EventHandler
 	private Array<double> fVelY;
 	private Array<double> fVelZ;
 	private Array<bool>   fVoxelSaved;
+	private Array<Actor>  fLastHit;   // who this object last hit, so it cannot grind
+	private Array<int>    fLastHitTic;
 
 	static RS_Flight Get()
 	{
@@ -208,6 +210,8 @@ class RS_Flight : EventHandler
 			fFlags[i]   = (fFlags[i] & FLIGHT_VOXEL) | flags;
 			fTics[i]    = 0;
 			fVelX[i]    = vel.x; fVelY[i] = vel.y; fVelZ[i] = vel.z;
+			fLastHit[i] = null;
+			fLastHitTic[i] = 0;
 			return;
 		}
 
@@ -221,6 +225,8 @@ class RS_Flight : EventHandler
 		fVelY.Push(vel.y);
 		fVelZ.Push(vel.z);
 		fVoxelSaved.Push((flags & FLIGHT_VOXEL) != 0 ? a.VoxelOverride : false);
+		fLastHit.Push(null);
+		fLastHitTic.Push(0);
 
 		// A THROWN VOXEL STAYS A VOXEL UNTIL IT LANDS. With r_voxels_mode "held
 		// & grabbed only", VoxelOverride is the only thing keeping the object
@@ -229,6 +235,10 @@ class RS_Flight : EventHandler
 		// fingers. Render state only: nothing in the playsim reads it, and
 		// whether a voxel pack is even loaded is a local choice.
 		if (flags & FLIGHT_VOXEL) a.VoxelOverride = true;
+
+		if (SNum("rs_throw_debug", 0) > 0)
+			Console.Printf("[RSFLIGHT] push %s at index %d of %d: %.3f kg, drag %.4f, flags %d",
+				a.GetClassName(), fActor.Size() - 1, fActor.Size(), massKg, drag, flags);
 	}
 
 	private void Drop(int i)
@@ -249,6 +259,8 @@ class RS_Flight : EventHandler
 		fVelY.Delete(i);
 		fVelZ.Delete(i);
 		fVoxelSaved.Delete(i);
+		fLastHit.Delete(i);
+		fLastHitTic.Delete(i);
 	}
 
 	// ---- one world step -----------------------------------------------------
@@ -271,6 +283,13 @@ class RS_Flight : EventHandler
 			if (!a || a.bDESTROYED) { Drop(i); continue; }
 
 			fTics[i]++;
+
+			// WHAT IT JUST HIT. Before anything below touches the remembered
+			// velocity, because that velocity is the only surviving record of
+			// how fast the object was going into the move that has just
+			// happened -- see the note where it is stored.
+			Impact(i, a);
+			if (!a || a.bDESTROYED) { Drop(i); continue; }
 
 			// GRAVITY, ADDED BACK. The engine has already taken the whole of it
 			// off during the step that just ran; this returns the part we did
@@ -317,6 +336,165 @@ class RS_Flight : EventHandler
 		}
 	}
 
+
+	// ---- hitting things -------------------------------------------------------
+	//
+	// THE VELOCITY IS ALREADY GONE BY THE TIME YOU CAN SEE THE HIT.
+	// P_XYMovement zeroes Vel when a move is refused, so an object that has just
+	// slammed into an imp reports a speed of zero. Everything below reads the
+	// remembered velocity instead: the one the step that just ran moved with.
+	//
+	// AND BlockingMobj IS NOT ENOUGH ON ITS OWN. A non-solid pickup never sets
+	// it, and neither does a barrel dropped straight onto a head. So the box is
+	// swept for anything overlapping, every step, and the blocking actor is only
+	// one of the candidates.
+	//
+	// NOT SOLID IN FLIGHT. Making a thrown object SOLID would let the overlap
+	// test go away, and it was considered and refused: thrown objects would jam
+	// doors and body-block the player, and worse, a SOLID object stops dead on
+	// contact -- which means P_XYMovement zeroes the very velocity the momentum
+	// transfer needs. It would break this function, not just add risk.
+	// (Designer, 2026-09-28.)
+	private void Impact(int i, Actor a)
+	{
+		// massObj / massTarget, NOT m and M. ZSCRIPT IDENTIFIERS ARE
+		// CASE-INSENSITIVE, so `double M = ...` below was the SAME VARIABLE as
+		// `m` and silently overwrote the object's mass with the target's. The
+		// physics then read a 0.35 kg clip as 100 kg: it did 200 damage (the
+		// cap) to an imp and threw it a metre and a half. It compiled without a
+		// word and the arithmetic was correct all along -- only the inputs were
+		// the same number twice. Caught 2026-09-28 by printing both.
+		double massObj = fMass[i];
+		if (massObj <= 0) return;
+
+		Vector3 lastVel = (fVelX[i], fVelY[i], fVelZ[i]);
+		double sp = lastVel.Length();
+		if (sp <= 0) return;
+
+		double minMS = SNum("rs_throw_dmg_min", 2.0);
+		if (RS_Mass.UnitsPerTicToMetresPerSec(sp) < minMS) return;
+
+		Actor thrower = fThrower[i];
+		int guard = int(SNum("rs_throw_hit_tics", 8));
+		double e = clamp(SNum("rs_throw_restitution", 0.3), 0.0, 1.0);
+
+		let it = BlockThingsIterator.Create(a, a.Radius + sp + 8.0);
+		while (it.Next())
+		{
+			Actor t = it.thing;
+			if (!t || t == a) continue;
+			if (!t.bSHOOTABLE && !t.bSOLID) continue;
+			if (t.Health <= 0 && t.bSHOOTABLE) continue;
+
+			// YOUR OWN THROW CANNOT HIT YOU, for the first few tics. The step
+			// clear in RS_Held.Release moves the object out of your cylinder;
+			// this is the other half, for the barrel that comes back down on
+			// the head of the person who lobbed it straight up. After the
+			// guard it is fair game, which is funnier and also correct.
+			if (t == thrower && fTics[i] <= guard) continue;
+
+			// NEVER THE SAME TARGET TWICE IN A ROW, with no time limit on it.
+			//
+			// This was a ten-step window and that was not enough. An object
+			// that comes to rest against a monster keeps overlapping it, and
+			// the monster keeps walking into the object, so the relative speed
+			// never quite falls to nothing: a thrown clip hit the same imp six
+			// times on the way to stopping. Harmless there because each hit
+			// rounded to under a point, but the same slide with a crate would
+			// have ground the imp down for free.
+			//
+			// "In a row" rather than "ever", so a barrel ploughing through a
+			// line still hits each of them, and can come back to the first one
+			// after touching a second.
+			if (fLastHit[i] == t) continue;
+
+			// REALLY OVERLAPPING, in Z as well. BlockThingsIterator works on the
+			// 2D blockmap, so without this a barrel rolling under a walkway
+			// hits whatever is standing on it.
+			if (a.Pos.z + a.Height <= t.Pos.z || t.Pos.z + t.Height <= a.Pos.z) continue;
+
+			double massTarget = RS_Mass.Kg(t);
+			if (massTarget <= 0) massTarget = 1.0;
+
+			Vector3 vRel = lastVel - t.Vel;
+			double rel = vRel.Length();
+			if (rel <= 0) continue;
+			Vector3 n = vRel / rel;
+
+			// MOMENTUM, BOTH WAYS. A heavy target barely moves and a light one
+			// never leaves faster than it was hit -- both fall out of the mass
+			// ratio rather than being special-cased.
+			if (!t.bDONTTHRUST)
+			{
+				Vector3 dT = n * ((1.0 + e) * (massObj / (massObj + massTarget)) * rel);
+				if (dT.Length() > 32.0) dT = dT / dT.Length() * 32.0;   // the engine's own kickback ceiling
+				t.Vel += dT;
+			}
+			a.Vel -= n * ((1.0 + e) * (massTarget / (massObj + massTarget)) * rel);
+
+			// ENERGY, IN JOULES, SCALED. Half m v squared with v in real metres
+			// per second -- converted with the FIXED world scale, never
+			// vr_vunits_per_meter, which is a personal comfort setting and
+			// would make the same throw hurt differently on two machines.
+			double ms  = RS_Mass.UnitsPerTicToMetresPerSec(rel);
+			double dmg = 0.5 * massObj * ms * ms * SNum("rs_throw_dmg_scale", 0.1);
+
+			// THE CAP, AND WHY IT IS ONE NUMBER AND NOT TWO.
+			//
+			// A cap proportional to the target's own health was proposed and is
+			// wrong: an imp has 60 hit points, so any sane fraction of it stops
+			// a thrown barrel killing an imp -- which is the entire feature. A
+			// flat ceiling does what was actually asked. A boss has thousands
+			// of hit points and 200 cannot one-shot it; an imp has sixty and
+			// 200 very much can. (Designer, 2026-09-28: "add a damage cap so a
+			// fast barrel can't one-shot a boss".)
+			dmg = min(dmg, SNum("rs_throw_dmg_cap", 200.0));
+
+			// WHAT THE ARITHMETIC ACTUALLY DID. Off by default. An impact
+			// resolves in one step and leaves nothing behind but a health
+			// number, so when that number is wrong there is no other way to
+			// see which of the five inputs produced it.
+			if (SNum("rs_throw_debug", 0) > 0)
+				Console.Printf("[RSIMPACT] %s %.3f kg -> %s %.1f kg  rel %.2f u/tic = %.2f m/s  dmg %.2f (cap %.0f)  tic %d",
+					a.GetClassName(), massObj, t.GetClassName(), massTarget, rel, ms, dmg,
+					SNum("rs_throw_dmg_cap", 200.0), fTics[i]);
+
+			if (t.bSHOOTABLE && dmg >= 1)
+			{
+				// DamageMobj, not a raw health subtraction: it credits the kill
+				// to whoever threw it and plays the pain frame, which is the
+				// reaction a sprite can actually show.
+				//
+				// DMG_THRUSTLESS because the push is handled above, from the
+				// object's mass. Without it ApplyKickback adds a second shove
+				// derived from the THROWER'S CURRENT WEAPON, so the barrel
+				// would hit harder while you happen to be holding a rocket
+				// launcher.
+				t.DamageMobj(a, thrower, int(dmg), 'Thrown', DMG_THRUSTLESS);
+			}
+
+			fLastHit[i] = t;
+			fLastHitTic[i] = level.maptime;
+
+			// AND THE OBJECT ITSELF, if MASSDEF said so. A barrel thrown into a
+			// crowd goes off on contact instead of landing among them intact.
+			if (fFlags[i] & FLIGHT_EXPLODE)
+			{
+				double hard = SNum("rs_throw_explode_ms", 4.0);
+				if (ms >= hard)
+				{
+					a.DamageMobj(a, thrower, max(int(dmg), 1000), 'Thrown', DMG_THRUSTLESS);
+					return;   // the entry is dropped by the caller on the next line
+				}
+			}
+
+			// One target per step. The next step sweeps again, so a barrel
+			// through a line still reaches all of them -- it just does not
+			// resolve four collisions in one instant with one velocity.
+			return;
+		}
+	}
+
 	// ---- the level goes away ------------------------------------------------
 	//
 	// Both ends, deliberately. WorldLoaded covers a savegame load, a new game
@@ -343,5 +521,7 @@ class RS_Flight : EventHandler
 		fVelY.Clear();
 		fVelZ.Clear();
 		fVoxelSaved.Clear();
+		fLastHit.Clear();
+		fLastHitTic.Clear();
 	}
 }

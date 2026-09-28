@@ -44,6 +44,9 @@ class RS_ThrowTest : EventHandler
 	private double launchSpeed; // units/tic, what the object actually left at
 	private double peakZ;
 	private double objectKg;
+	private Actor  target;       // something to throw AT, so impact is measured too
+	private int    targetHP0;
+	private Vector3 targetPos0;
 	private bool   hitCeiling;   // the throw was cut short by the room, not by physics
 	private int    touchTic;     // first step on the floor, which is not the same as stopped
 	private double touchRun;     // how far it had travelled by then, in units
@@ -106,6 +109,29 @@ class RS_ThrowTest : EventHandler
 		String cname = SStr("rs_throwtest_class", "ExplosiveBarrel");
 		Class<Actor> cls = (Class<Actor>)(Object.FindClass(cname, "Actor"));
 		if (!cls) { Console.Printf("[RSTHROWTEST] no such class: %s", cname); return; }
+
+		// SOMETHING TO HIT, when asked. Impact is the half of this feature that
+		// cannot be checked by watching an arc: knockback, damage and the kill
+		// credit all happen in one step and leave nothing behind but numbers.
+		target = null;
+		String tname = SStr("rs_throwtest_target", "");
+		if (tname != "")
+		{
+			Class<Actor> tcls = (Class<Actor>)(Object.FindClass(tname, "Actor"));
+			if (!tcls) { Console.Printf("[RSTHROWTEST] no such target class: %s", tname); }
+			else
+			{
+				double tdist = SNum("rs_throwtest_dist", 3.0) * RS_Mass.UNITS_PER_METRE;
+				target = Actor.Spawn(tcls, pmo.Vec3Angle(tdist, pmo.angle, 0));
+				if (target)
+				{
+					targetHP0  = target.Health;
+					targetPos0 = target.Pos;
+					Console.Printf("[RSTHROWTEST] target %s at %.1f m, %d hp, %.1f kg",
+						tname, tdist / RS_Mass.UNITS_PER_METRE, targetHP0, RS_Mass.Kg(target));
+				}
+			}
+		}
 
 		double speed = SNum("rs_throwtest_speed", 8.0);
 		double pitch = SNum("rs_throwtest_pitch", 20.0);
@@ -263,6 +289,17 @@ class RS_ThrowTest : EventHandler
 			hitCeiling ? "  -- HIT THE CEILING, the range below means nothing" : "");
 		Console.Printf("[RSTHROWTEST] expected %.1f m: %.1f m/s at %.0f deg from %.2f m up, under %.1f m/s^2 (Doom's own is %.1f)",
 			want, v0, pitch, h, g, gDoom);
+
+		// WHAT THE TARGET MADE OF IT. Damage taken and how far it was shoved,
+		// which are the two halves of an impact and come from different code.
+		if (target)
+		{
+			double shoved = (target.Pos.xy - targetPos0.xy).Length() / RS_Mass.UNITS_PER_METRE;
+			Console.Printf("[RSTHROWTEST] target: %d -> %d hp (%d damage), shoved %.2f m%s",
+				targetHP0, target.Health, targetHP0 - target.Health, shoved,
+				target.Health <= 0 ? ", KILLED" : "");
+			target = null;
+		}
 
 		watched = null;
 	}

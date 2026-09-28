@@ -1001,3 +1001,50 @@ server int    rs_throwtest_hands = 1;       // 2 doubles the arm, as a real heav
 // can agree with the arithmetic for two wrong reasons that cancel out; a column
 // of heights cannot.
 server int    rs_throwtest_trace = 0;
+
+// ---- HITTING THINGS WITH WHAT YOU THREW (added 2026-09-28) ----------------
+//
+// SERVER, all of them: damage and knockback must be identical everywhere.
+
+// How much of the object's bounce it keeps, 0 to 1. 0.3 is a crate hitting a
+// body -- mostly a thud, a little rebound.
+server float rs_throw_restitution = 0.3;
+
+// Metres per second below which a touch is not a hit. Measured on the object's
+// OWN speed, not the relative one: something standing still that you walk into
+// has not hit you. 3 rather than 2 because a clip sliding to a halt along the
+// floor is still doing 2.1, and that was registering as a throw landing.
+server float rs_throw_dmg_min = 3.0;
+
+// Damage per joule. Half m v squared in real units, times this. A 0.35 kg clip
+// at 8 m/s is about 11 J and does 1; a 60 kg barrel heaved two-handed is over
+// 400 J and does 40-odd, which kills an imp and does not kill a Baron.
+server float rs_throw_dmg_scale = 0.1;
+
+// THE CEILING, AND IT IS ONE NUMBER ON PURPOSE. A cap proportional to the
+// target's own health was proposed and is wrong: an imp has 60 hit points, so
+// any sane fraction of it stops a thrown barrel killing an imp -- which is the
+// whole feature. A flat ceiling does what was asked instead. A boss has
+// thousands of hit points and 200 cannot one-shot it; an imp has sixty and 200
+// very much can.
+server float rs_throw_dmg_cap = 200.0;
+
+// Tics after release during which a throw cannot hit the person who threw it.
+// The step-clear in Release handles the body; this handles the barrel lobbed
+// straight up. After it, you are fair game.
+server int rs_throw_hit_tics = 8;
+
+// Metres per second at which an `impact explode` object sets itself off. Below
+// it, a barrel can be rolled into a room without going off on the doorframe.
+server float rs_throw_explode_ms = 4.0;
+
+// Something for the harness to throw AT, and how far away in metres. Empty is
+// no target. Impact is the half of the feature that cannot be checked by
+// watching an arc: knockback, damage and the kill credit all resolve in one
+// step and leave nothing behind but numbers.
+server string rs_throwtest_target = "";
+server float  rs_throwtest_dist = 3.0;
+
+// A line per impact: both masses, the relative speed and the damage before
+// and after the cap. Off by default.
+server int rs_throw_debug = 0;
