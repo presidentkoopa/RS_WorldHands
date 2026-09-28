@@ -221,7 +221,15 @@ class RS_OvalEdit : EventHandler
 		if (want == (0, 0, 0)) return null;
 		Actor best = null;
 		double bestD = 1e18;
-		let it = ThinkerIterator.Create("WM_Prop");
+		// RESOLVED AT RUNTIME, WHICH A STRING LITERAL HERE DOES NOT DO. The comment above was
+		// right about the intent and wrong about the mechanism: ThinkerIterator.Create takes a
+		// class<Object>, so a string literal is converted AT COMPILE TIME and the name has to
+		// exist -- loading RS_WorldHands without RS_VR_Reload died with "Unknown class name
+		// 'WM_Prop'" before the game started. Object.FindClass is the runtime lookup and
+		// returns null for a class nobody defined, which is the behaviour this wanted.
+		Class<Object> propCls = Object.FindClass("WM_Prop", "Actor");
+		if (!propCls) return null;
+		let it = ThinkerIterator.Create(propCls);
 		Actor a;
 		while (a = Actor(it.Next()))
 		{
