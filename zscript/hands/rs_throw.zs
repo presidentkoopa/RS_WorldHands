@@ -198,7 +198,14 @@ class RS_Throw play
 		Vector3 offset = (0, 0, 0);
 		if (held)
 		{
-			Vector3 handPos = (hand == 0) ? pmo.AttackPos : pmo.OffhandPos;
+			// The REAL hand, for the same reason RS_Reach.Palm reads it: in a
+			// netgame AttackPos is the canonical shooting point rebuilt from
+			// the usercmd, not where the controller is, so a lever measured
+			// from it would be the distance from the object to the player's
+			// chest. Falls back to the old field when there is no controller.
+			Vector3 handPos = level.HandPos(hand);
+			if (handPos == (0, 0, 0))
+				handPos = (hand == 0) ? pmo.AttackPos : pmo.OffhandPos;
 			if (handPos.Length() > 0) offset = held.Pos - handPos;
 		}
 

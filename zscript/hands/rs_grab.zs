@@ -238,7 +238,32 @@ class RS_Reach play
     // the map.
     static Vector3 Palm(PlayerPawn pmo, PlayerInfo p, int hand)
     {
+        // THE REAL HAND, NOT THE SHOOTING POINT -- and in co-op those are not
+        // the same place at all.
+        //
+        // AttackPos is CANONICAL PLAYSIM STATE in a netgame: the engine rebuilds
+        // it every tic for every player from the replicated usercmd
+        // (UpdateCanonicalMainHandPose, p_user.cpp) so that aiming is identical
+        // on every peer, and the renderer is deliberately gated out of writing a
+        // real controller pose into it. In multiplayer it is therefore the
+        // pawn's SHOOTING POINT -- roughly the middle of the body -- and
+        // OffhandPos is a straight mirror of it. Reaching from there would have
+        // every co-op player grabbing things out of their own chest.
+        //
+        // level.HandPos is the local channel for exactly this: the real hand,
+        // this machine's own player, never serialised and never sent. What it
+        // decides travels afterwards as a command (rs_handnet.zs), which is the
+        // contract that made it safe to publish at all.
+        //
+        // (0,0,0) means no controller -- a desktop player, or tracking lost --
+        // and then the old field is still the right answer, because on a desktop
+        // the shooting point is as good a place as the hand has.
         Vector3 c = (hand == 0) ? pmo.AttackPos : pmo.OffhandPos;
+        if (pmo.PlayerNumber() == consoleplayer)   // local read, local decision
+        {
+            Vector3 real = level.HandPos(hand);
+            if (real != (0, 0, 0)) c = real;
+        }
 
         let hd = Hand(hand);
         if (hd)
