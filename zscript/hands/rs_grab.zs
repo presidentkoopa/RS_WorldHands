@@ -1428,7 +1428,7 @@ class RS_GrabHandler : EventHandler
                 // applies them itself in RS_Held.Release. Sending a finished
                 // velocity would have baked one machine's cvars into the other's
                 // physics.
-                RS_HandNet.SendDrop(hand, RS_Throw.HandVelocityFor(hand, pmo, p));
+                RS_HandNet.SendDrop(hand, RS_Throw.HandVelocityFor(hand, pmo, p, was));
                 if (dbg) Console.Printf("[RSHELD] hand %d let go of %s", hand, wasName);
                 continue;
             }
@@ -1632,7 +1632,7 @@ class RS_GrabHandler : EventHandler
                 // applies them itself in RS_Held.Release. Sending a finished
                 // velocity would have baked one machine's cvars into the other's
                 // physics.
-                RS_HandNet.SendDrop(hand, RS_Throw.HandVelocityFor(hand, pmo, p));
+                RS_HandNet.SendDrop(hand, RS_Throw.HandVelocityFor(hand, pmo, p, was));
                 if (dbg) Console.Printf("[RSHELD] hand %d let go of %s", hand, wasName);
                 continue;
             }

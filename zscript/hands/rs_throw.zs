@@ -119,8 +119,16 @@ class RS_Throw play
 	// gravity 3.7x too strong for a human arm. RS_Flight corrects the gravity
 	// instead, so the arc is the real one and a fudge on top of it would bend
 	// every throw upward twice.
-	static Vector3 HandVelocityFor(int hand, PlayerPawn pmo, PlayerInfo p)
+	// `held` is what is about to leave the hand. Given one, the measurement is
+	// taken at the OBJECT'S centre rather than at the controller's origin --
+	// see FromEngine. Without one this is the hand itself, which is what every
+	// caller wanted before the lever existed.
+	static Vector3 HandVelocityFor(int hand, PlayerPawn pmo, PlayerInfo p, Actor held = null)
 	{
+		// THE ENGINE FIRST, AND THE 35Hz RING ONLY IF IT HAS NOTHING.
+		Vector3 fromEngine = FromEngine(hand, pmo, p, held);
+		if (fromEngine.Length() > 0) return fromEngine;
+
 		let sw = RS_Swing.Get();
 		if (!sw || !RS_Reach.Flag("rs_throw", p, true)) return (0, 0, 0);
 
@@ -151,6 +159,81 @@ class RS_Throw play
 		Vector3 v = sw.ThrowVelocity(hand, aim);
 		if (v.Length() <= 0) return (0, 0, 0);
 		return v * personal;
+	}
+
+	// ---- WHAT THE ENGINE MEASURED, AT THE OBJECT RATHER THAN AT THE HAND ----
+	//
+	// Two things script cannot do for itself, both done in LevelLocals.
+	//
+	// THE WRIST. A thrown object is not at the controller's origin. Its centre
+	// sits away from the hand, and a frisbee or a newspaper flick is mostly
+	// ROTATION -- so the speed that matters is the hand's linear velocity plus
+	// omega x r. That cross product is only valid in a uniformly scaled space
+	// and MAP SPACE IS NOT ONE: the vertical is divided by pixelstretch and the
+	// angular velocity is not scaled at all. Computed here it would be wrong in
+	// Z by up to a fifth, varying with wrist orientation -- which is precisely
+	// the axis a frisbee lives on. The engine does it where the numbers are
+	// still isotropic metres and hands back a plain velocity.
+	//
+	// THE SAMPLE RATE. The playsim runs at 35Hz and a flick does not. The
+	// fastest instant of a throw falls between two tics, so a peak read off the
+	// tic grid is weaker and less repeatable than the arm that made it. The
+	// engine keeps a quarter second at render rate.
+	//
+	// RS_HAND_THROW is speed from the peak and heading from just after it. Both
+	// halves matter and they are different samples: the hand travels an ARC, so
+	// its fastest instant points somewhere else along that curve, and taking
+	// the heading from there sends the object where the hand was going a fifth
+	// of a second ago rather than where it was aimed when the fingers opened.
+	//
+	// MAP UNITS PER SECOND COME BACK. Everything in the playsim is per TIC.
+	static Vector3 FromEngine(int hand, PlayerPawn pmo, PlayerInfo p, Actor held)
+	{
+		if (!pmo || !RS_Reach.Flag("rs_throw_engine", p, true)) return (0, 0, 0);
+
+		// THE OFFSET IS A MAP-UNIT DIFFERENCE AND IT STAYS ONE. Do not convert
+		// it to metres on the way in: the vertical is scaled differently from
+		// the horizontals, so that conversion is the exact mistake the engine
+		// call exists to prevent. It meets the stretch once, inside.
+		Vector3 offset = (0, 0, 0);
+		if (held)
+		{
+			Vector3 handPos = (hand == 0) ? pmo.AttackPos : pmo.OffhandPos;
+			if (handPos.Length() > 0) offset = held.Pos - handPos;
+		}
+
+		// THE FAST BIT HAS TO BELONG TO THIS RELEASE. Same question
+		// rs_throw_grace asks of the 35Hz ring, asked of the render-rate one --
+		// a flick made before the object was even picked up is still the newest
+		// peak, and without this it becomes the throw. Milliseconds here
+		// because the ring is not on the tic grid.
+		double ageMs = level.HandPeakAgeMs(hand);
+		double graceMs = RS_Reach.Num("rs_throw_grace", p, 4) * 1000.0 / TICRATE;
+		int when = (ageMs >= 0 && ageMs <= graceMs) ? RS_HAND_THROW : RS_HAND_NOW;
+
+		Vector3 vPoint = level.HandVelAtPoint(hand, offset, when) / TICRATE;
+		if (vPoint.Length() <= 0) return (0, 0, 0);
+
+		// THE WRIST DIAL, AND WHY IT IS TWO CALLS. rs_throw_wrist scales the
+		// lever and nothing else, so it has to be separable from the hand's own
+		// motion -- and the engine deliberately never exposes a raw angular
+		// velocity for anyone to scale. Asking a second time at the controller
+		// origin gives the hand alone, and the difference IS the lever.
+		double wrist = RS_Reach.Num("rs_throw_wrist", p, 1.0);
+		if (offset.Length() > 0 && wrist != 1.0)
+		{
+			Vector3 vHand = level.HandVelAtPoint(hand, (0, 0, 0), when) / TICRATE;
+			vPoint = vHand + (vPoint - vHand) * wrist;
+		}
+
+		// A DROP IS STILL A DROP. The threshold is the same one the 35Hz path
+		// uses, asked of the same quantity.
+		double need = RS_Swing.MetresPerSecToUnitsPerTic(RS_Reach.Num("rs_throw_min", p, 1.2));
+		if (vPoint.Length() < need) return (0, 0, 0);
+
+		// The off-hand dial, spent here on the sender exactly as below.
+		double personal = (hand == 1) ? RS_Reach.Num("rs_throw_scale_off", p, 1.0) : 1.0;
+		return vPoint * personal;
 	}
 
 	// ---- THE ARC ----------------------------------------------------------

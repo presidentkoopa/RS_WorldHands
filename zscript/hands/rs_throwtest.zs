@@ -133,6 +133,22 @@ class RS_ThrowTest : EventHandler
 			}
 		}
 
+		// THE ENGINE'S OWN MEASUREMENT, PROVED CALLABLE.
+		//
+		// This harness injects a velocity straight into the applier, so it never
+		// goes near RS_Throw.FromEngine -- which is correct, that half needs a
+		// controller. But a native that resolves at compile time can still be
+		// missing at RUN time, and the failure is a VM abort mid-level rather
+		// than an error anybody sees coming. So both are called once, here, on
+		// a desktop where the honest answer is zero. A boot test that reaches
+		// the line below has proved they are reachable and safe.
+		// engineVel / engineAge, NOT probe -- `Actor probe` is declared further
+		// down this same function and ZScript would take the two as one name.
+		Vector3 engineVel = level.HandVelAtPoint(0, (0, 0, 0), RS_HAND_THROW);
+		double engineAge = level.HandPeakAgeMs(0);
+		Console.Printf("[RSTHROWTEST] engine hand measurement reachable: vel (%.2f, %.2f, %.2f), peak age %.0f ms",
+			engineVel.x, engineVel.y, engineVel.z, engineAge);
+
 		double speed = SNum("rs_throwtest_speed", 8.0);
 		double pitch = SNum("rs_throwtest_pitch", 20.0);
 		int    hands = int(SNum("rs_throwtest_hands", 1));

@@ -1048,3 +1048,21 @@ server float  rs_throwtest_dist = 3.0;
 // A line per impact: both masses, the relative speed and the damage before
 // and after the cap. Off by default.
 server int rs_throw_debug = 0;
+
+// ---- THE WRIST, AND THE ENGINE'S OWN MEASUREMENT (added 2026-09-28) -------
+
+// Use the engine's render-rate measurement at all. Off falls back to the 35Hz
+// ring in RS_Swing, which is what every throw used before the ring existed --
+// kept because a desktop player, a headset that has lost tracking and a build
+// with no OpenXR device all land there anyway, so the path has to work.
+user bool rs_throw_engine = true;
+
+// How much of the WRIST goes into a throw. A thrown object is not at the
+// controller's origin: its centre sits away from the hand, so a flick sends it
+// off at the hand's speed PLUS the rotation carried over that distance. 1.0 is
+// the real thing. 0 throws as though the object were welded to the controller,
+// which is what everything did before this existed.
+//
+// Applied on the SENDER and baked into what travels, so it is safe as a
+// per-player preference.
+user float rs_throw_wrist = 1.0;

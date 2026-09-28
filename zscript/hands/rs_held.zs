@@ -557,7 +557,7 @@ class RS_Held : EventHandler
 		// the part that needs a controller travels. See rs_handnet.zs.
 		Vector3 vhand;
 		if (haveVel)            vhand = carriedVel;
-		else if (pmo && p)      vhand = RS_Throw.HandVelocityFor(hand, pmo, p);
+		else if (pmo && p)      vhand = RS_Throw.HandVelocityFor(hand, pmo, p, a);
 		else                    vhand = (0, 0, 0);
 
 		// WEIGHT, AND WHY ONE NUMBER IS ENOUGH.
