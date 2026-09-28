@@ -45,6 +45,11 @@ version "5.0.0"
 #include "zscript/hands/rs_mass.zs"
 #include "zscript/hands/rs_flight.zs"
 
+// A THROW WITH NO ARM ATTACHED. Everything after the fingers open is plain
+// playsim, so it can be driven from a cvar and checked without a headset.
+// Inert unless rs_throwtest is set. See the file.
+#include "zscript/hands/rs_throwtest.zs"
+
 // THE FIST, as a weapon. Lives with the hands because the thing you punch with
 // IS the hand -- see the file. Replaces the vanilla Fist, so every weapon set
 // loaded beside this one gets it without knowing.

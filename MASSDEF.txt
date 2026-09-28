@@ -1,0 +1,84 @@
+// ============================================================================
+// WHAT DOOM'S OWN THINGS WEIGH, in kilograms.
+//
+// Read by RS_Mass (zscript/hands/rs_mass.zs). Any pk3 may ship its own MASSDEF;
+// they are all read, in load order, and a later line for the same class wins.
+// A class not named here falls back to its ANCESTORS' lines, then to a clamped
+// guess from its collision box -- and the guess is bad, which is why this file
+// exists.
+//
+// HOW BAD: a pistol clip measured by its bounding box comes out at 2.3 kg. The
+// box is 40 x 40 x 16 units because that is what the player must walk into to
+// pick it up, and it has nothing whatever to do with the size of the clip. Run
+// through any sensible density that is a hand grenade, not a magazine. Every
+// number below replaces one of those.
+//
+// THE NUMBERS ARE REAL ONES, roughly. A loaded M1911 magazine is about 0.35 kg;
+// a fragmentation-grenade-sized medikit is not, so a Medikit is 1.5. A steel
+// 200-litre drum, empty, is around 20 kg -- 60 here because Doom's barrel is
+// full of something that explodes, and because it should take a heave.
+//
+//   mass "<class>" <kg> [drag <n>] [flutter] [impact explode]
+//
+// `drag` is per (unit/tic), applied as Vel /= (1 + drag * speed). 0 is a
+// vacuum, which is what Doom has always had and what most things should keep:
+// a thrown clip is not meaningfully slowed by air over the ten metres it
+// travels. Reach for it only for things that genuinely flutter or float.
+// ============================================================================
+
+// ---- ammunition -----------------------------------------------------------
+// A loaded pistol magazine, a box of them, four shotgun shells, a case of them.
+mass "Clip"             0.35
+mass "ClipBox"          3.5
+mass "Shell"            0.2
+mass "ShellBox"         1.0
+mass "RocketAmmo"       3.0
+mass "RocketBox"        15.0
+mass "Cell"             1.5
+mass "CellPack"         9.0
+mass "Backpack"         5.0
+
+// ---- health and armour ----------------------------------------------------
+mass "Stimpack"         0.2
+mass "Medikit"          1.5
+mass "HealthBonus"      0.1
+mass "ArmorBonus"       0.1
+mass "GreenArmor"       8.0
+mass "BlueArmor"        12.0
+mass "Soulsphere"       2.0
+mass "Megasphere"       2.0
+mass "Berserk"          1.0
+mass "InvulnerabilitySphere" 1.0
+mass "BlurSphere"       1.0
+mass "RadSuit"          4.0
+mass "Infrared"         0.5
+mass "Allmap"           0.3
+
+// ---- keys, which should throw like a keycard and not like a brick ---------
+mass "RedCard"          0.05
+mass "BlueCard"         0.05
+mass "YellowCard"       0.05
+mass "RedSkull"         0.4
+mass "BlueSkull"        0.4
+mass "YellowSkull"      0.4
+
+// ---- weapons --------------------------------------------------------------
+// Close to the real articles, so a thrown shotgun and a thrown BFG do not
+// travel the same distance. Guns whose weight the weapons lane has measured
+// answer through the weight service instead and do not need a line here; these
+// are the vanilla fallbacks.
+mass "Pistol"           0.9
+mass "Shotgun"          3.6
+mass "SuperShotgun"     3.8
+mass "Chaingun"         12.0
+mass "RocketLauncher"   7.0
+mass "PlasmaRifle"      6.0
+mass "BFG9000"          20.0
+mass "Chainsaw"         5.0
+
+// ---- props ----------------------------------------------------------------
+// THE BARREL IS THE SHOWPIECE. 60 kg keeps a third of the arm's speed one
+// handed and a half with two, which is the difference between a shove and a
+// heave -- and it is the object most likely to be picked up and thrown at
+// something. `impact explode` lets a hard landing set it off.
+mass "ExplosiveBarrel"  60.0   drag 0.001   impact explode

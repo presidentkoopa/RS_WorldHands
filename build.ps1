@@ -46,7 +46,7 @@ $out  = Join-Path $root 'RS_WorldHands.pk3'
 # its MAPINFO registers no event handlers at all, which reads in-headset as
 # "the whole mod does nothing."
 $requiredLumps = @('zscript.txt', 'MAPINFO.txt', 'CVARINFO.txt', 'MENUDEF.txt')
-$optionalLumps = @('MODELDEF.txt', 'TEXTURES.txt', 'TRNSLATE.txt', 'SNDINFO.txt', 'ANIMDEFS.txt', 'KEYCONF')
+$optionalLumps = @('MODELDEF.txt', 'TEXTURES.txt', 'TRNSLATE.txt', 'SNDINFO.txt', 'ANIMDEFS.txt', 'KEYCONF', 'MASSDEF.txt')
 $contentDirs   = @('zscript', 'models', 'graphics', 'sprites', 'sounds')
 
 $files = @()
