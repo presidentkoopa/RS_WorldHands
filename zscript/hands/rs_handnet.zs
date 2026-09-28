@@ -55,6 +55,18 @@ class RS_HandNet : EventHandler
 		                              hand, subject, pose | (twohand ? 0x10000 : 0));
 	}
 
+	// `vel` IS THE HAND'S MOTION, NOT THE THROW (2026-09-28).
+	//
+	// Units per tic, relative to the player, with nothing spent on it: no mass,
+	// no server throw scale, no player velocity. The applier puts all three on
+	// in RS_Held.Release, identically everywhere.
+	//
+	// WHY NOT SEND THE FINISHED NUMBER. It was simpler and it was wrong. Mass,
+	// the throw scale and the thrower's velocity are all knowable from the
+	// playsim, so sending them means one machine's answer overwrites what every
+	// other machine would have worked out -- and the day those disagree, the
+	// object lands somewhere different on each and nothing says why. Send only
+	// what needs a controller. Derive the rest.
 	static void SendDrop(int hand, Vector3 vel)
 	{
 		EventHandler.SendNetworkEvent(String.Format("rs_hand_drop:%d", hand),

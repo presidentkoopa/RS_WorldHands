@@ -610,7 +610,13 @@ user bool rs_throw = true;
 user float rs_throw_min = 1.2;
 
 // Multiplier on the throw. 1.0 is your actual arm speed.
-user float rs_throw_scale = 1.0;
+//
+// SERVER, and it moved from `user` on 2026-09-28. It is applied by whichever
+// machine APPLIES a release, not by the one that measured it, and all of them
+// have to reach the same number or the object lands in a different place on
+// each. The personal dial below stays a user cvar precisely because it is
+// applied on the sender and travels baked into the velocity.
+server float rs_throw_scale = 1.0;
 
 // Same, but only for the OFF hand, on top of the multiplier above. Most
 // people's off arm genuinely throws with less wrist snap and follow-through
@@ -663,6 +669,53 @@ user float rs_throw_lift = 0.35;
 // one multiplier cannot express both.
 user bool  rs_throw_spin = true;
 user float rs_throw_spin_scale = 1.0;
+
+// ---- WEIGHT AND THE AIR (added 2026-09-28) --------------------------------
+//
+// SERVER, ALL OF THEM. These decide where a thrown object ends up, and every
+// machine has to agree. A per-player preference here is a desync with a
+// plausible-looking explanation, which is the worst kind to find.
+//
+// GRAVITY, AS A FRACTION OF DOOM'S.
+//
+// Doom's gravity is about 3.7 times too strong for a human arm. One unit per
+// tic squared is 1225 units per second squared; at 32 units to the metre that
+// is roughly 38 m/s^2 against a real 9.8. That is the whole reason throwing
+// has always needed a heave: the arm throws at human speed into a world that
+// pulls like a gas giant.
+//
+// 0.27 is real gravity. It will look slightly floaty NEXT TO Doom, because
+// gibs, dropped shells and your own jump still fall at the old rate and only
+// thrown things are corrected -- accepted deliberately, on the grounds that a
+// player compares a throw to their own arm and not to a gib. Raise it toward
+// 1.0 if the floatiness reads worse than the heave did.
+//
+// Applies to ANYTHING that leaves the hands, gently set down included. Two
+// fall rates for one object is a bug the player is right to report.
+server float rs_throw_gravity = 0.27;
+
+// How far a `flutter` object wanders sideways per step, in units per tic. Only
+// things MASSDEF marks as flutter -- paper, card, a severed wing. 0 is still
+// air.
+server float rs_throw_flutter = 0.35;
+
+// The longest anything is tracked in the air, in world steps, before the list
+// lets go of it. 1400 is forty seconds. This is a leak guard for the object
+// that never lands -- one that ends up inside geometry, or on a lift that
+// keeps it moving -- and not a gameplay number.
+server int rs_throw_maxtics = 1400;
+
+// THE ARM, IN KILOGRAMS, and the reason a barrel does not fly like a baseball.
+//
+// A throw keeps the fraction  armKg / (armKg + objectKg)  of the hand's speed,
+// so a 0.15 kg baseball keeps 99% of it, a 5 kg shield 86%, and a 60 kg barrel
+// a third. Nothing else has to be special-cased: one number gives every object
+// in the game a weight you can feel through the throw.
+//
+// 30 is deliberately super-human. A real arm throwing a 60 kg barrel keeps
+// almost none of its speed; this is Doomguy, and he gets to heave it. Judge it
+// with the two-handed barrel test rather than against a physics table.
+server float rs_throw_arm_kg = 30.0;
 
 // ---- USING WHAT YOU ARE HOLDING -----------------------------------------
 //

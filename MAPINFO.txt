@@ -17,6 +17,9 @@
 // Foundation first: the hands publish pose and basis and resolve their own
 // grab before anything reads either.
 //
+//   RS_MassTable          what things weigh, read once from MASSDEF. First
+//                         because it holds no per-tic state and everything
+//                         downstream may ask it; it has no tick at all.
 //   RS_HandsAlwaysOn      the always-on psprite hand layers
 //   RS_HandWorldHandler   the WORLD hands on the controller transform
 //   RS_GrabPolicy         what is grabbable, and as what
@@ -39,5 +42,5 @@
 // does, it will be polled in the reverse of the order written above.
 GameInfo
 {
-	AddEventHandlers = "RS_HandsAlwaysOn", "RS_OvalEdit", "RS_HandWorldHandler", "RS_GrabPolicy", "RS_Stabilize", "RS_GrabHandler", "RS_Swing", "RS_Held", "RS_Pull", "RS_Route", "RS_GrabViz", "RS_WorldFistGiver", "RS_HandNet"
+	AddEventHandlers = "RS_MassTable", "RS_HandsAlwaysOn", "RS_OvalEdit", "RS_HandWorldHandler", "RS_GrabPolicy", "RS_Stabilize", "RS_GrabHandler", "RS_Swing", "RS_Held", "RS_Flight", "RS_Pull", "RS_Route", "RS_GrabViz", "RS_WorldFistGiver", "RS_HandNet"
 }

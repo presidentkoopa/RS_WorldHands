@@ -95,6 +95,20 @@ class RS_Held : EventHandler
 	// belongs to, and read only your own at the point of draw.
 	private int   hPose[MAXPLAYERS * 2];
 
+	// WHEN THIS HAND LAST SHARED ITS OBJECT WITH THE OTHER ONE, in maptime.
+	//
+	// A two-handed heave throws harder than a one-handed one, and by the time
+	// the LAST hand lets go there is nothing left to see it by: the first
+	// hand's release takes the early exit in Release, clears its own slot, and
+	// the survivor then looks exactly like a hand that was alone all along. So
+	// the moment the first hand comes off, it stamps the survivor, and the
+	// final release reads the stamp.
+	//
+	// Indexed per player AND hand. Several fields further down are [2] and
+	// predate WorldTick looping players -- see the note on hPose for what that
+	// cost the last time. No reason for a new one to repeat it.
+	private int   hTwoHandTic[MAXPLAYERS * 2];
+
 	// The flags we changed on the object, so they can be put back exactly.
 	// Stored in the PRIMARY hand's slot and moved when the primary changes.
 	// Saved once per object, never per hand: a second hand joining must not
@@ -265,76 +279,16 @@ class RS_Held : EventHandler
 
 	// ---- access ----------------------------------------------------------
 
-	// ---- thrown voxels -----------------------------------------------------
+	// ---- thrown voxels: MOVED (2026-09-28) -----------------------------------
 	//
-	// A THROWN VOXEL STAYS A VOXEL UNTIL IT SETTLES. With r_voxels_mode "held & grabbed
-	// only" (auto whenever a voxel pack is loaded), VoxelOverride is the only thing
-	// that keeps an object drawn as its voxel. Release used to hand the pre-grab value
-	// straight back, so a barrel thrown from the hand popped into its sprite the
-	// instant it left the fingers. It now keeps the voxel through the flight and
-	// gets its own value back once it has come to rest on the floor (or after ten
-	// seconds, whichever is first). RS_Pull flights already do this themselves.
+	// The list that kept a thrown object drawn as its voxel until it landed now
+	// lives in RS_Flight, as one flag on the entry every release already makes
+	// (RS_Flight.FLIGHT_VOXEL). It was always the same list: "what is in the
+	// air, and for how long". Keeping two of them meant two answers to when an
+	// object had landed, and only one of them was ever asked.
 	//
-	// Render state only: no RNG, nothing the playsim reads.
-	Array<Actor> thrownVoxel;
-	Array<bool>  thrownVoxelSaved;
-	Array<int>   thrownVoxelTics;
-
-	void KeepVoxelInFlight(Actor a, bool savedVoxel)
-	{
-		if (!a) return;
-		a.VoxelOverride = true;
-		int i = thrownVoxel.Find(a);
-		if (i < thrownVoxel.Size()) { thrownVoxelTics[i] = 0; return; }
-		thrownVoxel.Push(a);
-		thrownVoxelSaved.Push(savedVoxel);
-		thrownVoxelTics.Push(0);
-	}
-
-	// A GRAB OF SOMETHING STILL IN FLIGHT inherits the value it had before the throw,
-	// not the one the flight imposed -- otherwise it would come out of the next hold
-	// as a voxel for good. Returns `current` for anything that was not thrown.
-	bool TakeThrownVoxel(Actor a, bool current)
-	{
-		int i = thrownVoxel.Find(a);
-		if (!a || i >= thrownVoxel.Size()) return current;
-		bool saved = thrownVoxelSaved[i];
-		thrownVoxel.Delete(i);
-		thrownVoxelSaved.Delete(i);
-		thrownVoxelTics.Delete(i);
-		return saved;
-	}
-
-	private void TickThrownVoxels()
-	{
-		for (int i = thrownVoxel.Size() - 1; i >= 0; i--)
-		{
-			Actor a = thrownVoxel[i];
-			bool settled = false;
-			if (a)
-			{
-				thrownVoxelTics[i]++;
-				bool resting = (a.Pos.z <= a.floorz + 1.0) && (a.Vel.Length() < 1.0);
-				// A tic of lift-off right after the throw is not a landing: require it to
-				// have been in the air, or be at rest for good, or run out of time.
-				settled = (resting && thrownVoxelTics[i] > 4) || thrownVoxelTics[i] > 350;
-				if (settled) a.VoxelOverride = thrownVoxelSaved[i];
-			}
-			if (!a || settled)
-			{
-				thrownVoxel.Delete(i);
-				thrownVoxelSaved.Delete(i);
-				thrownVoxelTics.Delete(i);
-			}
-		}
-	}
-
-	private void ForgetThrownVoxels()
-	{
-		thrownVoxel.Clear();
-		thrownVoxelSaved.Clear();
-		thrownVoxelTics.Clear();
-	}
+	// Release pushes the flag; SaveFlags takes the pre-throw value back through
+	// RS_Flight.End when a hand catches something still in flight.
 
 	static RS_Held Get()
 	{
@@ -421,6 +375,18 @@ class RS_Held : EventHandler
 	{
 		let c = CVar.GetCVar(n, p);
 		return c ? c.GetBool() : d;
+	}
+
+	// A SERVER cvar, read with no player. Anything that decides where a thrown
+	// object ends up has to come out the same on every machine, so it must not
+	// be reachable per player -- passing a PlayerInfo to a server cvar works
+	// and hides the mistake. The default is repeated at every call site on
+	// purpose: an undeclared cvar in ZScript is not an error, it is 0.0, and a
+	// throw scale of zero is a game where nothing can be thrown at all.
+	private static double ServerNum(String n, double d)
+	{
+		let c = CVar.GetCVar(n, null);
+		return c ? c.GetFloat() : d;
 	}
 
 	// ---- taking and letting go -------------------------------------------
@@ -563,6 +529,12 @@ class RS_Held : EventHandler
 
 		if (otherStillHas)
 		{
+			// STAMP THE SURVIVOR. This is the only moment anything can tell
+			// that the object was held in two hands -- a tic later the slot is
+			// cleared and the remaining hand is indistinguishable from one that
+			// never had help. See hTwoHandTic.
+			hTwoHandTic[IX(pnum, other)] = level.maptime;
+
 			// Promote the remaining hand. It inherits the flag backup, because
 			// the object is still held and its flags must stay ours until the
 			// LAST hand comes off it.
@@ -577,10 +549,48 @@ class RS_Held : EventHandler
 
 		// THE VELOCITY IS SOLVED BEFORE THE FLAGS GO BACK, because clearing the
 		// player is only possible while the object can still pass through them.
-		Vector3 v;
-		if (haveVel)            v = carriedVel;
-		else if (pmo && p)      v = RS_Throw.VelocityFor(hand, pmo, p);
-		else                    v = (0, 0, 0);
+		//
+		// WHAT ARRIVES IS THE HAND'S MOTION AND NOTHING ELSE (2026-09-28).
+		// Mass, the server throw scale and the thrower's own velocity are all
+		// knowable from the playsim, so they are spent HERE, on every machine,
+		// rather than baked in by the one machine that had a controller. Only
+		// the part that needs a controller travels. See rs_handnet.zs.
+		Vector3 vhand;
+		if (haveVel)            vhand = carriedVel;
+		else if (pmo && p)      vhand = RS_Throw.HandVelocityFor(hand, pmo, p);
+		else                    vhand = (0, 0, 0);
+
+		// WEIGHT, AND WHY ONE NUMBER IS ENOUGH.
+		//
+		//     keep = armKg / (armKg + objectKg)
+		//
+		// A 0.15 kg baseball keeps 99% of the hand's speed, a 5 kg shield 86%,
+		// a 60 kg barrel a third. Nothing needs a special case and nothing
+		// needs a table: every object in the game gets a weight you can feel
+		// through the throw, from the one mass lookup.
+		//
+		// TWO HANDS DOUBLE THE ARM rather than doubling the speed -- a barrel
+		// goes from a third to a half, which is a heave, and a baseball goes
+		// from 99% to 99.5%, which is nothing. That asymmetry is the point: a
+		// second hand should matter enormously for the heavy thing and not at
+		// all for the light one, and it falls out of the same formula.
+		double objectKg = RS_Mass.Kg(a);
+		double armKg    = ServerNum("rs_throw_arm_kg", 30.0);
+		if (armKg <= 0) armKg = 30.0;
+		bool twoHanded  = (level.maptime - hTwoHandTic[IX(pnum, hand)]) <= 10
+		                  && hTwoHandTic[IX(pnum, hand)] > 0;
+		if (twoHanded) armKg *= 2.0;
+
+		double keep = armKg / (armKg + max(objectKg, 0.0));
+
+		// THE PLAYER'S OWN MOTION GOES BACK IN HERE, ONCE. The hand is measured
+		// relative to the player, so without this a barrel thrown while
+		// sprinting falls short by exactly your running speed. Added after the
+		// mass scaling, never before it: your body carrying the object is not
+		// your arm throwing it, and weight does not slow down the bit that was
+		// already moving with you.
+		Vector3 v = vhand * keep * ServerNum("rs_throw_scale", 1.0);
+		if (pmo) v += pmo.Vel;
 
 		// STEP IT CLEAR OF YOUR OWN BODY FIRST, or a thrown object goes UP and
 		// nowhere else.
@@ -613,33 +623,60 @@ class RS_Held : EventHandler
 			}
 		}
 
-		// A THROWN VOXEL STAYS A VOXEL IN FLIGHT (see KeepVoxelInFlight). Read before
-		// RestoreFlags puts the pre-grab value back and ClearSlot wipes the backup.
+		// A THROWN VOXEL STAYS A VOXEL IN FLIGHT. Read before RestoreFlags puts
+		// the pre-grab value back and ClearSlot wipes the backup.
 		bool drawnAsVoxel = a.VoxelOverride;
-		bool voxelBeforeGrab = hSavedVoxel[hand];
 		RestoreFlags(pnum, hand, a);
 		ClearSlot(pnum, hand);
+
+		// INTO THE AIR -- AND EVERY RELEASE GOES, not every throw.
+		//
+		// This used to be gated on `v.Length() > 0`, so a throw got the flight
+		// treatment and a gentle set-down got Doom's raw gravity. Two fall
+		// rates for one object, and the player reporting it as a bug would have
+		// been right: put a medikit down and it drops like a stone, lob the
+		// same medikit and it floats. The drop/throw threshold decides which
+		// VELOCITY an object leaves with (rs_throw_min, in RS_Throw) and it
+		// does not get to decide how the thing falls. (Designer, 2026-09-28.)
+		//
+		// RS_Flight writes the velocity itself, corrects gravity every world
+		// step, applies drag, and forgets the object once it lands. Nothing on
+		// the actor is modified, so losing the list to a save or a level change
+		// costs nothing but the correction.
+		//
+		// The voxel state rides along as a flag rather than a second list --
+		// see RS_Flight.FLIGHT_VOXEL. `drawnAsVoxel` is local and depends on
+		// whether a voxel pack is loaded on THIS machine, which is exactly the
+		// kind of thing that must never reach the playsim; it reaches only the
+		// render override, which is where it always went.
+		// RestoreFlags has already put VoxelOverride back to its pre-grab value
+		// by this line, so the flight saves the right thing to land with and
+		// nothing here has to second-guess it. Do NOT reinstate voxelBeforeGrab
+		// by hand: RestoreFlags refuses to act on a slot that never took a
+		// backup, and writing the zeroed default over a real value is the
+		// silent kind of wrong.
+		int flightFlags = RS_Mass.Flags(a);
+		if (drawnAsVoxel) flightFlags |= RS_Flight.FLIGHT_VOXEL;
+
+		RS_Flight.Launch(a, v, objectKg, RS_Mass.Drag(a), flightFlags, pmo);
 
 		// LAST, and only for the hand that actually let go of it. A two-handed
 		// object released by one hand is still held by the other, and that path
 		// returned above -- you cannot throw something you are still holding.
 		if (pmo && p)
 		{
-			if (v.Length() > 0)
-			{
-				// Vel only. RestoreFlags put NOGRAVITY back one line above, and
-				// ClearSlot has already zeroed the backup -- reading it here
-				// would be reading state this method just wiped.
-				a.Vel = v;
-				if (drawnAsVoxel) KeepVoxelInFlight(a, voxelBeforeGrab);
-				let sw = RS_Swing.Get();
-				if (sw) sw.Forget(hand);
-				if (Flag("rs_hand_debug", p, true))
-					Console.Printf("[RSTHROW] hand %d threw %s at %.1f m/s",
-						hand, a.GetClassName(),
-						RS_Swing.UnitsPerTicToMetresPerSec(v.Length()));
-			}
+			let sw = RS_Swing.Get();
+			if (sw) sw.Forget(hand);
+			if (v.Length() > 0 && Flag("rs_hand_debug", p, true))
+				Console.Printf("[RSTHROW] hand %d threw %s (%.2f kg, keeps %d%%%s) at %.1f m/s",
+					hand, a.GetClassName(), objectKg, int(keep * 100.0),
+					twoHanded ? ", two-handed" : "",
+					RS_Mass.UnitsPerTicToMetresPerSec(v.Length()));
 		}
+
+		// The stamp is spent. Left standing, a hand that once shared an object
+		// would throw the NEXT one with a doubled arm for ten more tics.
+		hTwoHandTic[IX(pnum, hand)] = 0;
 	}
 
 	void ReleaseAll(int pnum)
@@ -695,7 +732,12 @@ class RS_Held : EventHandler
 		hSavedRoll[hand]       = a.Roll;
 		hSavedPitch[hand]      = a.Pitch;
 		hSavedAngle[hand]      = a.Angle;
-		hSavedVoxel[hand]      = TakeThrownVoxel(a, a.VoxelOverride);
+		// GRABBING SOMETHING STILL IN THE AIR. End its flight FIRST and take
+		// back the voxel value it had before it was ever thrown -- not the one
+		// the flight imposed on it, or the object would come out of this hold
+		// drawn as a voxel for good. RS_Flight.End does both in one call, and
+		// it must happen before the line below records what we are saving.
+		hSavedVoxel[hand]      = RS_Flight.End(a, a.VoxelOverride);
 		hFollowScaled[hand]    = false;
 
 		// SPECIAL cleared is the one that is not optional. An item in your hand
@@ -1220,7 +1262,6 @@ class RS_Held : EventHandler
 	// is. The test is whether the DECISION is local, not whether the state is.
 	override void WorldTick()
 	{
-		TickThrownVoxels();
 		for (int i = 0; i < MAXPLAYERS; ++i)
 			if (playeringame[i] && players[i].mo)
 				TickPlayer(i);
@@ -1479,7 +1520,6 @@ class RS_Held : EventHandler
 		// player, so releasing only your own would leave every other player's slots
 		// pointing at actors from the map that just ended.
 		for (int i = 0; i < MAXPLAYERS; ++i) ReleaseAll(i);
-		ForgetThrownVoxels();
 	}
 
 	override void WorldUnloaded(WorldEvent e)
@@ -1504,6 +1544,5 @@ class RS_Held : EventHandler
 			ReleaseAll(i);
 			if (playeringame[i] && players[i].mo) ClearClaims(i, players[i].mo);
 		}
-		ForgetThrownVoxels();
 	}
 }

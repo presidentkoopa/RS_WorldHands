@@ -38,6 +38,13 @@ version "5.0.0"
 #include "zscript/hands/rs_grabviz.zs"
 #include "zscript/hands/rs_stabilize.zs"
 
+// WHAT THINGS WEIGH, AND WHAT THE AIR DOES TO THEM. Added 2026-09-28 for the
+// throwing work. Both are general -- nothing in either file knows about hands,
+// and RS_Held is merely their first caller. rs_mass before rs_flight only
+// because a flight consumes a mass and never the other way round.
+#include "zscript/hands/rs_mass.zs"
+#include "zscript/hands/rs_flight.zs"
+
 // THE FIST, as a weapon. Lives with the hands because the thing you punch with
 // IS the hand -- see the file. Replaces the vanilla Fist, so every weapon set
 // loaded beside this one gets it without knowing.

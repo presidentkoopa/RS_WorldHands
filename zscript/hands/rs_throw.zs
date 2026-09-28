@@ -93,6 +93,66 @@ class RS_Throw play
 		return v * scale + pmo.Vel;
 	}
 
+	// ---- THE SAME THROW, MEASURED AND NOT YET SPENT -----------------------
+	//
+	// WHAT THE HAND DID, AND NOTHING ELSE. No player velocity, no server
+	// scale, no lift, no mass. Just the speed and heading of the hand at the
+	// moment the fingers opened, in units per tic, relative to the player.
+	//
+	// WHY THIS EXISTS SEPARATELY FROM VelocityFor. A release travels between
+	// machines as three integers (rs_handnet.zs). Everything the RECEIVER can
+	// work out for itself must be worked out there rather than sent, or two
+	// machines that disagree about a cvar put the object in two different
+	// places. Mass, the server throw scale and the thrower's own velocity are
+	// all knowable from the playsim, so they are applied on arrival, in
+	// RS_Held.Release. Only the part that needs a controller travels.
+	//
+	// AND VelocityFor STAYS EXACTLY AS IT WAS. It is a published service
+	// (`throw.vel.*`) and four packages outside this one read it -- the
+	// grenade, the thrown gun, the lightsaber and the shield -- every one of
+	// them expecting a velocity it can hand straight to an actor. Quietly
+	// changing what it means would have changed all four with no error
+	// anywhere, which is how a system starts throwing things differently and
+	// nobody can say when it began. New meaning, new request name.
+	//
+	// NO LIFT HERE, DELIBERATELY. rs_throw_lift existed to fake an arc under a
+	// gravity 3.7x too strong for a human arm. RS_Flight corrects the gravity
+	// instead, so the arc is the real one and a fudge on top of it would bend
+	// every throw upward twice.
+	static Vector3 HandVelocityFor(int hand, PlayerPawn pmo, PlayerInfo p)
+	{
+		let sw = RS_Swing.Get();
+		if (!sw || !RS_Reach.Flag("rs_throw", p, true)) return (0, 0, 0);
+
+		double need = RS_Swing.MetresPerSecToUnitsPerTic(
+			RS_Reach.Num("rs_throw_min", p, 1.2));
+
+		// TOO SLOW IS A DROP -- and a drop is a zero here, not a refusal. The
+		// applier adds the player's own velocity to whatever arrives, so a zero
+		// becomes "leaves at exactly the speed you were walking", which is what
+		// setting something down while moving should do.
+		if (sw.PeakSpeed(hand) < need) return (0, 0, 0);
+
+		// THE OFF-HAND DIAL IS A USER CVAR AND IT IS APPLIED HERE ON PURPOSE.
+		// Most people's off arm throws with less snap than their main one, and
+		// that is a fact about the player, not about the game -- so it is a
+		// personal setting. It stays netplay-safe because it is spent BEFORE
+		// the velocity is sent: what travels is already the number this player
+		// meant, and no receiver ever reads the cvar.
+		double personal = (hand == 1) ? RS_Reach.Num("rs_throw_scale_off", p, 1.0) : 1.0;
+
+		int aim   = int(RS_Reach.Num("rs_throw_aim", p, 3));
+		int grace = int(RS_Reach.Num("rs_throw_grace", p, 4));
+
+		// AND THE FAST BIT HAS TO BELONG TO THIS RELEASE -- see VelocityFor.
+		if (sw.PeakAge(hand) > grace)
+			return sw.LastVelocity(hand) * personal;
+
+		Vector3 v = sw.ThrowVelocity(hand, aim);
+		if (v.Length() <= 0) return (0, 0, 0);
+		return v * personal;
+	}
+
 	// ---- THE ARC ----------------------------------------------------------
 	//
 	// PEOPLE THROW UPWARDS AND DO NOT NOTICE THEY ARE DOING IT.
@@ -180,6 +240,25 @@ class RS_ThrowService : Service
 			Vector3 v = RS_Throw.VelocityFor(hand, pmo, pmo.player);
 			if (request == "throw.vel.x") return int(v.x * 1000.0);
 			if (request == "throw.vel.y") return int(v.y * 1000.0);
+			return int(v.z * 1000.0);
+		}
+
+		// THE HAND'S OWN MOTION, WITH NOTHING SPENT ON IT YET (2026-09-28).
+		//
+		// A SECOND REQUEST RATHER THAN A CHANGE TO THE ONE ABOVE. Four packages
+		// outside this one read `throw.vel.*` and every one of them expects a
+		// velocity ready to hand to an actor -- player motion in, scale
+		// applied. Redefining it would have changed all four silently, which is
+		// a fault with no error message and no obvious start date.
+		//
+		// Ask for this one when you intend to apply mass, the server scale and
+		// the thrower's velocity yourself -- which is what anything sending a
+		// release across the network has to do. See RS_Throw.HandVelocityFor.
+		if (request == "throw.vel.hand.x" || request == "throw.vel.hand.y" || request == "throw.vel.hand.z")
+		{
+			Vector3 v = RS_Throw.HandVelocityFor(hand, pmo, pmo.player);
+			if (request == "throw.vel.hand.x") return int(v.x * 1000.0);
+			if (request == "throw.vel.hand.y") return int(v.y * 1000.0);
 			return int(v.z * 1000.0);
 		}
 

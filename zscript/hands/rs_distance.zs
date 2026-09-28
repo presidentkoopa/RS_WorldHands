@@ -297,8 +297,14 @@ class RS_Pull : EventHandler
 
 		// Voxel from the moment it is yours. Free on anything without one --
 		// the engine falls through to the ordinary sprite path.
-		let heldSys = RS_Held.Get();
-		lockSavedVoxel[hand] = heldSys ? heldSys.TakeThrownVoxel(a, a.VoxelOverride) : a.VoxelOverride;
+		//
+		// LOCKING SOMETHING STILL IN THE AIR ends its flight first and takes
+		// back the voxel value it had before it was thrown, not the one the
+		// flight imposed -- otherwise a barrel caught on the beam comes out of
+		// the hold drawn as a voxel for good. This was RS_Held.TakeThrownVoxel
+		// until 2026-09-28, when the two lists of "what is in the air" became
+		// one. See RS_Flight.
+		lockSavedVoxel[hand] = RS_Flight.End(a, a.VoxelOverride);
 		if (RS_Reach.Flag("rs_grab_voxel", p, true)) a.VoxelOverride = true;
 
 		lockActor[hand] = a;

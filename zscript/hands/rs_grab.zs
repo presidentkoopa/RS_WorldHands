@@ -1421,7 +1421,14 @@ class RS_GrabHandler : EventHandler
                 // value -- the applier must never re-derive it from a pose it does
                 // not have. RS_HandNet's applier then performs the release on every
                 // machine, this one included, for the player the command names.
-                RS_HandNet.SendDrop(hand, RS_Throw.VelocityFor(hand, pmo, p));
+                //
+                // THE HAND'S MOTION ONLY (2026-09-28). What travels is the arm,
+                // not the throw: mass, the server scale and the player's own
+                // velocity are all readable from the playsim, so every machine
+                // applies them itself in RS_Held.Release. Sending a finished
+                // velocity would have baked one machine's cvars into the other's
+                // physics.
+                RS_HandNet.SendDrop(hand, RS_Throw.HandVelocityFor(hand, pmo, p));
                 if (dbg) Console.Printf("[RSHELD] hand %d let go of %s", hand, wasName);
                 continue;
             }
@@ -1618,7 +1625,14 @@ class RS_GrabHandler : EventHandler
                 // value -- the applier must never re-derive it from a pose it does
                 // not have. RS_HandNet's applier then performs the release on every
                 // machine, this one included, for the player the command names.
-                RS_HandNet.SendDrop(hand, RS_Throw.VelocityFor(hand, pmo, p));
+                //
+                // THE HAND'S MOTION ONLY (2026-09-28). What travels is the arm,
+                // not the throw: mass, the server scale and the player's own
+                // velocity are all readable from the playsim, so every machine
+                // applies them itself in RS_Held.Release. Sending a finished
+                // velocity would have baked one machine's cvars into the other's
+                // physics.
+                RS_HandNet.SendDrop(hand, RS_Throw.HandVelocityFor(hand, pmo, p));
                 if (dbg) Console.Printf("[RSHELD] hand %d let go of %s", hand, wasName);
                 continue;
             }
