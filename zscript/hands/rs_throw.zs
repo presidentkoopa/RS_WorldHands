@@ -219,7 +219,16 @@ class RS_Throw play
 		int when = (ageMs >= 0 && ageMs <= graceMs) ? RS_HAND_THROW : RS_HAND_NOW;
 
 		Vector3 vPoint = level.HandVelAtPoint(hand, offset, when) / TICRATE;
-		if (vPoint.Length() <= 0) return (0, 0, 0);
+		if (vPoint.Length() <= 0)
+		{
+			// THE ENGINE HAD NOTHING, so the 35Hz ring answers instead. Said
+			// out loud because it is the single most useful thing to know when
+			// a throw comes out wrong: every other number means something
+			// different depending on which path produced it.
+			RS_Telem.Line(String.Format("measure hand=%d path=fallback reason=no-engine-sample agems=%.0f",
+				hand, ageMs));
+			return (0, 0, 0);
+		}
 
 		// THE WRIST DIAL, AND WHY IT IS TWO CALLS. rs_throw_wrist scales the
 		// lever and nothing else, so it has to be separable from the hand's own
@@ -236,7 +245,24 @@ class RS_Throw play
 		// A DROP IS STILL A DROP. The threshold is the same one the 35Hz path
 		// uses, asked of the same quantity.
 		double need = RS_Swing.MetresPerSecToUnitsPerTic(RS_Reach.Num("rs_throw_min", p, 1.2));
-		if (vPoint.Length() < need) return (0, 0, 0);
+		if (vPoint.Length() < need)
+		{
+			RS_Telem.Line(String.Format("measure hand=%d path=engine verdict=drop mps=%.2f need=%.2f",
+				hand, RS_Mass.UnitsPerTicToMetresPerSec(vPoint.Length()),
+				RS_Mass.UnitsPerTicToMetresPerSec(need)));
+			return (0, 0, 0);
+		}
+
+		// WHAT THE WRIST ADDED, separately from what the arm did. If a flick
+		// throws nothing, this line says whether the lever was zero (no wrist
+		// term at all -- offset, sign or angular velocity) or simply small.
+		Vector3 vHandOnly = level.HandVelAtPoint(hand, (0, 0, 0), when) / TICRATE;
+		RS_Telem.Line(String.Format(
+			"measure hand=%d path=engine when=%d agems=%.0f offset=%.0f arm_mps=%.2f point_mps=%.2f lever_mps=%.2f",
+			hand, when, ageMs, offset.Length(),
+			RS_Mass.UnitsPerTicToMetresPerSec(vHandOnly.Length()),
+			RS_Mass.UnitsPerTicToMetresPerSec(vPoint.Length()),
+			RS_Mass.UnitsPerTicToMetresPerSec((vPoint - vHandOnly).Length())));
 
 		// The off-hand dial, spent here on the sender exactly as below.
 		double personal = (hand == 1) ? RS_Reach.Num("rs_throw_scale_off", p, 1.0) : 1.0;

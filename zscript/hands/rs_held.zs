@@ -667,11 +667,12 @@ class RS_Held : EventHandler
 		{
 			let sw = RS_Swing.Get();
 			if (sw) sw.Forget(hand);
-			if (v.Length() > 0 && Flag("rs_hand_debug", p, true))
-				Console.Printf("[RSTHROW] hand %d threw %s (%.2f kg, keeps %d%%%s) at %.1f m/s",
-					hand, a.GetClassName(), objectKg, int(keep * 100.0),
-					twoHanded ? ", two-handed" : "",
-					RS_Mass.UnitsPerTicToMetresPerSec(v.Length()));
+			RS_Telem.Line(String.Format(
+				"throw hand=%d obj=%s kg=%.3f in_mps=%.2f out_mps=%.2f keep=%.2f two=%d scale=%.2f",
+				hand, a.GetClassName(), objectKg,
+				RS_Mass.UnitsPerTicToMetresPerSec(vhand.Length()),
+				RS_Mass.UnitsPerTicToMetresPerSec(v.Length()),
+				keep, twoHanded ? 1 : 0, ServerNum("rs_throw_scale", 1.0)));
 		}
 
 		// The stamp is spent. Left standing, a hand that once shared an object

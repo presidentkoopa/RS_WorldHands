@@ -1110,3 +1110,15 @@ user float rs_hold_sag_max = 3.0;
 // velocity would send a held object off along whatever direction the mesh's
 // own axes point. Speed carries the weight here; direction stays fixed.
 user float rs_hold_dip_max = 4.0;
+
+// ---- THE SESSION WRITES DOWN WHAT HAPPENED (added 2026-09-28) -------------
+//
+// One [TELEM] line per event -- throw, land, hit, catch -- plus a capability
+// report a second into each level. It lands in whatever logfile the launch is
+// using, which for the owner is E:/DOOMWork/lastrun.log.
+//
+// ON BY DEFAULT on purpose. A diagnostic that has to be switched on is a
+// diagnostic that is off the one time it was needed, and nobody should have to
+// remember a console command before putting a headset on. It costs a handful
+// of prints per throw and nothing at all between them.
+user bool rs_telemetry = true;

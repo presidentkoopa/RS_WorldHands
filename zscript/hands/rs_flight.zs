@@ -93,6 +93,11 @@ class RS_Flight : EventHandler
 	private Array<bool>   fVoxelSaved;
 	private Array<Actor>  fLastHit;   // who this object last hit, so it cannot grind
 	private Array<int>    fLastHitTic;
+	// Where it left from, for the telemetry line at the other end. A distance
+	// is the one number that says whether a throw went anywhere, and it cannot
+	// be recovered after the fact.
+	private Array<double> fStartX;
+	private Array<double> fStartY;
 
 	static RS_Flight Get()
 	{
@@ -112,6 +117,12 @@ class RS_Flight : EventHandler
 		let c = CVar.GetCVar(n, null);
 		return c ? c.GetFloat() : d;
 	}
+
+	// The same read, reachable from the telemetry report, which wants to state
+	// the settings a session actually ran with rather than the ones anybody
+	// assumed. A log that does not say what gravity was is a log that cannot
+	// explain a throw.
+	static double TelemNum(String n, double d) { return SNum(n, d); }
 
 	// ---- the door ----------------------------------------------------------
 
@@ -142,6 +153,8 @@ class RS_Flight : EventHandler
 		if (i >= f.fActor.Size()) return current;
 		bool saved = f.fVoxelSaved[i];
 		bool wasVoxel = (f.fFlags[i] & FLIGHT_VOXEL) != 0;
+		RS_Telem.Line(String.Format("caught obj=%s kg=%.3f airtics=%d",
+			a.GetClassName(), f.fMass[i], f.fTics[i]));
 		f.Drop(i);
 		return wasVoxel ? saved : current;
 	}
@@ -262,6 +275,8 @@ class RS_Flight : EventHandler
 			fVelX[i]    = vel.x; fVelY[i] = vel.y; fVelZ[i] = vel.z;
 			fLastHit[i] = null;
 			fLastHitTic[i] = 0;
+			fStartX[i] = a.Pos.x;
+			fStartY[i] = a.Pos.y;
 			return;
 		}
 
@@ -277,6 +292,8 @@ class RS_Flight : EventHandler
 		fVoxelSaved.Push((flags & FLIGHT_VOXEL) != 0 ? a.VoxelOverride : false);
 		fLastHit.Push(null);
 		fLastHitTic.Push(0);
+		fStartX.Push(a.Pos.x);
+		fStartY.Push(a.Pos.y);
 
 		// A THROWN VOXEL STAYS A VOXEL UNTIL IT LANDS. With r_voxels_mode "held
 		// & grabbed only", VoxelOverride is the only thing keeping the object
@@ -311,6 +328,8 @@ class RS_Flight : EventHandler
 		fVoxelSaved.Delete(i);
 		fLastHit.Delete(i);
 		fLastHitTic.Delete(i);
+		fStartX.Delete(i);
+		fStartY.Delete(i);
 	}
 
 	// ---- one world step -----------------------------------------------------
@@ -382,7 +401,15 @@ class RS_Flight : EventHandler
 			// grace is there because the first step after a throw can legally
 			// show the object still inside the floor slab it was standing on.
 			bool resting = (a.Pos.Z <= a.floorz + 1.0) && (a.Vel.Length() < 1.0);
-			if ((resting && fTics[i] > 4) || fTics[i] > maxTics) { Drop(i); continue; }
+			if ((resting && fTics[i] > 4) || fTics[i] > maxTics)
+			{
+				RS_Telem.Line(String.Format("land obj=%s kg=%.3f tics=%d ran=%.1fm%s",
+					a.GetClassName(), fMass[i], fTics[i],
+					(a.Pos.xy - (fStartX[i], fStartY[i])).Length() / RS_Mass.UNITS_PER_METRE,
+					fTics[i] > maxTics ? " TIMEOUT" : ""));
+				Drop(i);
+				continue;
+			}
 		}
 	}
 
@@ -504,10 +531,8 @@ class RS_Flight : EventHandler
 			// resolves in one step and leaves nothing behind but a health
 			// number, so when that number is wrong there is no other way to
 			// see which of the five inputs produced it.
-			if (SNum("rs_throw_debug", 0) > 0)
-				Console.Printf("[RSIMPACT] %s %.3f kg -> %s %.1f kg  rel %.2f u/tic = %.2f m/s  dmg %.2f (cap %.0f)  tic %d",
-					a.GetClassName(), massObj, t.GetClassName(), massTarget, rel, ms, dmg,
-					SNum("rs_throw_dmg_cap", 200.0), fTics[i]);
+			RS_Telem.Line(String.Format("hit obj=%s objkg=%.3f tgt=%s tgtkg=%.1f mps=%.2f dmg=%.0f tics=%d",
+				a.GetClassName(), massObj, t.GetClassName(), massTarget, ms, dmg, fTics[i]));
 
 			if (t.bSHOOTABLE && dmg >= 1)
 			{
@@ -573,5 +598,7 @@ class RS_Flight : EventHandler
 		fVoxelSaved.Clear();
 		fLastHit.Clear();
 		fLastHitTic.Clear();
+		fStartX.Clear();
+		fStartY.Clear();
 	}
 }

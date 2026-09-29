@@ -50,6 +50,11 @@ version "5.0.0"
 // Inert unless rs_throwtest is set. See the file.
 #include "zscript/hands/rs_throwtest.zs"
 
+// ONE LINE PER EVENT, INTO HIS OWN LOG. The owner plays in a headset and
+// everything past the controller can only run there -- so the session writes
+// down what happened instead of him having to describe it. See the file.
+#include "zscript/hands/rs_telemetry.zs"
+
 // THE FIST, as a weapon. Lives with the hands because the thing you punch with
 // IS the hand -- see the file. Replaces the vanilla Fist, so every weapon set
 // loaded beside this one gets it without knowing.
