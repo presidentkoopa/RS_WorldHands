@@ -38,6 +38,16 @@ letting go of anything.
 | Turn | left / right | up / down |
 | Turn | push / pull | size |
 
+On a gun part the sticks work in two passes, one stop each:
+
+| Stop | Move stick push / pull | Move stick left / right | Turn stick left / right | Turn stick push / pull |
+| --- | --- | --- | --- | --- |
+| **WHERE** | along the barrel | across | up / down | size (keeps its shape) |
+| **SHAPE** | length | width | height | size (keeps its shape) |
+
+Size on a part scales its length, width and height together. It never touches
+"reach as a ball", which would throw the card's shape away and make a sphere.
+
 There is a 0.15 deadzone, because a stick at rest is not at zero and a value nudged
 every tic by a resting stick drifts all session without anyone touching it.
 
@@ -47,14 +57,21 @@ Speed is `rs_oval_rate`, default `0.12`.
 
 ## What it steps through
 
-Thirteen stops, in this order:
+In this order:
 
-1. **The gun in your main hand** — where it sits in your hand, and its scale
-2. **The gun in your off hand** — same
-3. **Main hand seat** — where your hand model sits on the controller
-4. **Off hand seat** — same
-5. **The support point** — where your off hand braces a two-handed gun
-6. **Gun parts 0–7** — each part's grab point and how big a reach it has
+1. **The gun in your main hand**: where it sits in your hand, and its scale
+2. **The gun in your off hand**: same
+3. **Main hand seat**: where your hand model sits on the controller
+4. **Off hand seat**: same
+5. **The support point**: where your off hand braces a two-handed gun
+6. **Every part of the guns in your hands, both hands, by name.** Each part is
+   two stops: WHERE, then SHAPE. The label says which gun, which part and which pass,
+   for example `OFF gun: slide -- SHAPE`.
+
+The part list is read from what RS_VR_Reload publishes for the guns you are actually
+holding (`wm_gp_name_*`), the same list its own grab-point page uses. It is rebuilt
+every time you press next, so it follows weapon changes. Empty slots and brace points
+are not offered.
 
 The hand seats are in the same cycle on purpose. An oval that looks wrong on the gun
 is as often a hand sitting wrong on the controller, and the two can only be told
@@ -88,40 +105,49 @@ unreadable.
   dropped key-up, a level change with the button down — suppression ends anyway. A
   stuck suppression is a player who cannot walk or turn with nothing on screen to
   blame.
+- **A level change is a release too.** The handler is registered per map, so it dies
+  with the level and takes the countdown with it. It therefore gives the sticks back
+  and restores your oval settings when the level unloads. Your own settings are also
+  written to `rs_oval_pending` (archived) while the mode is on, so a quit or crash with
+  the button down is undone on the next map load. Before 2026-09-29 neither was true:
+  a map change mid-hold saved the forced-on ovals into your ini.
 
 ---
 
 ## Where your numbers go
 
-This is the part that is **not uniform**, and it is the thing most worth knowing
-before you spend an hour tuning something.
+**Everything saves when you let go of the button**, and the ini is written right
+then, so a crash doesn't lose it.
 
-### Gun placement and hand seats — permanent, immediately
+### Gun placement, hand seats and the support point
 
-They write the same cvars the menu sliders write, and those cvars are `user`, so they
-land in your ini and stay there. Whatever is set when you let go is simply what that
-gun's placement now is. Nothing to save, nothing to confirm.
+These write `user` cvars (the same ones the menu sliders write), and the support
+point is filed per weapon model into `rs_stab_table`. All of it lands in your ini.
+Nothing to confirm.
 
-**MODELDEF is never edited.** A gun's MODELDEF block only *names* the prefix its
-placement cvars use (`PlacementCVars wm_main`). The adjuster writes those cvars. If a
-tuned value should become the shipped default for everybody, that is a separate
-deliberate step — baking it into CVARINFO, which is what the
-`// owner's tuned value, baked in 2026-09-15 (was 0.0)` comments in that file record.
+**MODELDEF is never edited.** To make a tuned value the shipped default for
+everybody, it still has to be baked into CVARINFO, which is what the
+`// owner's tuned value, baked in ...` comments there record.
 
-### The support point — permanent, per weapon, automatic
+### Gun part ovals
 
-It writes live cvars; the stabilize system notices the change, files it into a table
-keyed by that weapon's model, and saves. So each gun remembers its own support point
-without you doing anything.
+The adjuster uses RS_VR_Reload's own bake, the same one its grab-point page's Bake
+button runs. A part is saved when you step off it or let go of the button:
 
-### Gun part grab points — SCRATCH ONLY
+- the card lines are printed to the console,
+- they are kept in the **bake ledger** (`wm_bake_ledger_*`, in the ini) and the ini
+  is written,
+- in single player the numbers are written straight into the card in play, and the
+  ledger is laid over the cards at every map load. **So the part stays where you put
+  it, this session and every one after.**
 
-These go into a tuning scratch set (`wm_tune_*`) that is claimed for one gun and one
-part at a time. **They do not persist.** They must be baked into the gun's card
-afterwards, which prints the card lines to paste.
+The shipped card files are still the defaults for everybody else. The ledger is your
+machine's copy on top of them, until its lines are pasted into the cards. The ledger
+holds 64 parts; clear it on the grab-point page once they're pasted.
 
-If you tune six guns' grab points in one session and quit without baking, you have
-lost six guns' worth of work. This is the single most important thing on this page.
+**In a netgame** cards must read the same on every machine, so the ledger is not laid
+over them there. The part keeps its tuning while you play (it stays in the tuning
+scratch) and is saved to the ledger when you move on to another part.
 
 ---
 
@@ -129,20 +155,12 @@ lost six guns' worth of work. This is the single most important thing on this pa
 
 These are real and currently unfixed.
 
-**Gun parts are main-hand only.** The code hardcodes the main hand when it claims the
-tuning scratch, so the off-hand gun's parts cannot be adjusted with the sticks at all.
-This matters more than it sounds: the Pistolet is an off-hand gun, so the showpiece
-pistol's slide and magazine are unreachable this way. Fixing it needs a way to say
-which hand you are tuning — realistically a fourteenth stop in the cycle.
+**The support oval has one size number from the sticks.** It carries three axis
+scales in its cvars, but the sticks only move its overall multiplier. Gun part ovals
+do have length, width and height (the SHAPE pass).
 
-**Eight of a possible sixteen parts.** A card can carry sixteen parts; the cycle
-offers eight. Stepping past a gun's real count harmlessly tunes nothing, but parts
-8–15 have no way in.
-
-**Ovals have one size number, not three.** "Size" is a single ball radius for gun
-parts. There is no separate height, width and depth. The support oval does carry
-three axis scales in its cvars, but the sticks only move its overall multiplier — so
-you cannot make an oval tall and narrow from in-game.
+**Clearing the bake ledger does not undo cards already changed this session.** The
+cards go back to shipped on the next map load.
 
 **The on-screen label is a flat 2D line.** It is a HUD overlay pinned to your view,
 not something in the world. We have a billboard system — real depth-tested quads,

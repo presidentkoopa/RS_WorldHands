@@ -978,6 +978,14 @@ user bool rs_handworld_subject = true;
 // How fast a stick moves a grip oval while the adjust key is held (rs_ovaledit.zs).
 user float rs_oval_rate = 0.12;
 
+// THE PLAYER'S OWN OVAL SETTINGS WHILE THE ADJUST KEY FORCES THEM ON (rs_ovaledit.zs).
+// Empty when the mode is not active. While it is, two digits: rs_stab_viz then
+// wm_show_grabs as they were before entering. Archived ON PURPOSE -- the handler holding
+// the in-memory copy dies on a level change, and the game can quit with the key down; this
+// is what lets the next map, or the next launch, put the player's settings back.
+// Not a setting. Leave it alone.
+user string rs_oval_pending = "";
+
 // ---- THE THROW HARNESS (added 2026-09-28) ---------------------------------
 //
 // A scripted throw with no arm attached: spawn, take, release with a velocity
