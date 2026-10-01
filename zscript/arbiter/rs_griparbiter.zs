@@ -127,7 +127,11 @@ class RS_GripArbiterService : Service
 	// Both files' comments already described hello as identity and version as
 	// version. One shared const meant that was not actually true.
 	const IDENTITY = 1;
-	const PROTOCOL = 2;
+	// PROTOCOL 3 (2026-10-01): priority, pre-emption, the held object and attach point, the
+	// previous owner, and a lease on the real clock. Every PROTOCOL 2 request below still
+	// answers exactly as it did -- a v2 consumer that never learns the new vocabulary keeps
+	// working unchanged, which is the only reason this could be done in one step.
+	const PROTOCOL = 3;
 
 	// ONE SLOT PER HAND PER PLAYER. Indexed [pnum * HANDS + hand], the same
 	// flattening RS_Holsters uses for its own per-player tables, because
@@ -163,6 +167,99 @@ class RS_GripArbiterService : Service
 	// stops saying it stops meaning it.
 	private int   mNearTic[SLOTS];
 
+	// ---- PROTOCOL 3 STATE ------------------------------------------------
+	//
+	// None of this existed. A claim was three scalars -- owner, subject, stamp -- so the
+	// arbiter could say WHO holds a hand and WHAT FOR, and nothing else. It could not say how
+	// strongly, what object is in the hand, where on that object, or who had it before. Those
+	// are the questions a consumer actually has to answer to decide whether to stand down, so
+	// every consumer kept its own private copy of some of it: RS_Held.hClaimed,
+	// RS_Stabilize.latchedSubject, RS_VR_Reload.IsOurs and ShieldSaw's GRIPSUBJ_Grip compare
+	// are four shadow ledgers of the same facts, each read on a path the arbiter cannot see.
+	//
+	// PRIORITY. The class of the claim, not of the claimant: the same mod claims at different
+	// strengths for different reasons. 0 means a PROTOCOL 2 claim, which is deliberately
+	// WEAKER than every named class, so an old consumer can never pre-empt a new one.
+	private int   mPrio[SLOTS];
+
+	// May this claim be taken by something stronger? Set by the claimant, because only it
+	// knows whether being interrupted mid-act leaves a mess. A rack half-done is not
+	// pre-emptable; a hand merely reaching is.
+	private bool  mPreempt[SLOTS];
+
+	// WHAT IS IN THE HAND, and where it is held. The object is the thing itself so a consumer
+	// can ask about it rather than guess from the subject; attach is a free-form name the
+	// claimant chooses ('magwell', 'forend', 'pommel') and the arbiter never interprets.
+	//
+	// The object is a plain Actor reference held by a Service. Services are OF_Transient and
+	// are never serialized, so this cannot resurrect anything across a save; and a destroyed
+	// actor must still be treated as absent, which is why every read of it goes through
+	// objectOf() below rather than touching the array.
+	private Actor mObject[SLOTS];
+	private Name  mAttach[SLOTS];
+
+	// WHO HELD IT BEFORE. So a pre-empted owner can be told, and so grip.lost can answer
+	// "you lost it to X" rather than only "you no longer have it". Cleared with the slot.
+	private Name  mPrevOwner[SLOTS];
+	private int   mLostTic[SLOTS];
+
+	// THE PRIORITY LADDER, as the owner accepted it on 2026-10-01. Values are spaced so a
+	// class can be inserted between two without renumbering every consumer.
+	//
+	//   SYSTEM     100  the game itself: a cutscene, a death, a level change
+	//   MECHANISM   80  a gun part mid-action -- a rack, a bolt, a crane. Not interruptible:
+	//                   stopping half way leaves the weapon in a state nothing owns.
+	//   HELD        70  an object actually in the hand
+	//   BRACE       60  a support hand on a weapon. Yields to anything that HOLDS, which is
+	//                   the owner's rule: a brace is the weakest thing that still touches.
+	//   INBOUND     50  an object being pulled toward the hand but not yet in it
+	//   REACH       40  a hand merely reaching at something
+	const PRIO_SYSTEM    = 100;
+	const PRIO_MECHANISM = 80;
+	const PRIO_HELD      = 70;
+	const PRIO_BRACE     = 60;
+	const PRIO_INBOUND   = 50;
+	const PRIO_REACH     = 40;
+
+	// A claim made through the PROTOCOL 2 `grip.claim` has no class. It sits below the ladder
+	// rather than inside it, so introducing priorities cannot let an un-migrated consumer
+	// start winning arguments it used to lose.
+	const PRIO_LEGACY    = 0;
+
+	// The object in a slot, or null -- never the raw array. A reference to a destroyed actor
+	// is not null in ZScript, it is a corpse that still answers, so this is the only safe way
+	// to read it.
+	// Deliberately NOT const: a const method takes a readonly self, and a pointer
+	// read out through one is readonly too, so the returned Actor would not
+	// convert back. Nothing that calls this is const.
+	private Actor objectOf(int s)
+	{
+		if (s < 0 || s >= SLOTS) return null;
+		let mo = mObject[s];
+		if (mo == null || mo.bDestroyed) return null;
+		return mo;
+	}
+
+	// Clear one slot completely. Every release path goes through this, so a new field added
+	// above can never be left behind by one of them -- which is exactly how mSubject outlived
+	// its owner before.
+	private void clearSlot(int s, Name lostTo = 'None')
+	{
+		if (s < 0 || s >= SLOTS) return;
+		if (mOwner[s] != 'None')
+		{
+			mPrevOwner[s] = mOwner[s];
+			mLostTic[s]   = level.realtime;
+		}
+		mOwner[s]   = 'None';
+		mSubject[s] = 0;
+		mTic[s]     = 0;
+		mPrio[s]    = PRIO_LEGACY;
+		mPreempt[s] = false;
+		mObject[s]  = null;
+		mAttach[s]  = 'None';
+	}
+
 	// A slot is live only if it has an owner AND the lease has not run out.
 	// Every read goes through this rather than testing mOwner directly, so
 	// expiry can never be forgotten at one call site and honoured at another --
@@ -171,11 +268,43 @@ class RS_GripArbiterService : Service
 	{
 		if (s < 0 || s >= SLOTS)   return false;
 		if (mOwner[s] == 'None')   return false;
-		// level.time restarts on every map while this Service does not, so
-		// a lease stamped late on the previous level reads as a large
-		// NEGATIVE age here and would pass for minutes. Negative = dead.
-		int age = level.time - mTic[s];
+		// THE LEASE IS ON THE REAL CLOCK, NOT THE WORLD CLOCK (changed 2026-10-01).
+		//
+		// level.time stops dead in a freeze and runs at a fraction of real speed under
+		// slow motion (g_levellocals.h:1336). A two-second lease measured on it is two
+		// seconds of WORLD time: at a quarter scale that is eight real seconds of a
+		// hand jammed by a claimant that already died, and in a full freeze it never
+		// expires at all. A lease is a watchdog on a piece of CODE, not on the world,
+		// so it belongs on the clock that keeps running -- the same reasoning that put
+		// recoil recovery and barrel heat on realtime.
+		//
+		// THE NEGATIVE GUARD IS NOW LOAD-BEARING, DO NOT DELETE IT. realtime is reset
+		// to 0 on every map change AND on every savegame load (ResetWorldClock,
+		// g_levellocals.h:1448) while this Service is never destroyed and never
+		// serialized, so a stamp from before the boundary is LARGER than the clock it
+		// is compared against. Negative age = dead, which is the answer we want.
+		// Belt and braces: the companion handler clears every slot at the boundary as
+		// well, because a stale stamp can also be merely SMALL and look alive for the
+		// first two seconds of the new map.
+		int age = level.realtime - mTic[s];
 		return age >= 0 && age <= LEASE_TICS;
+	}
+
+	// Would a claim at this priority take the slot right now? The whole decision in one
+	// place, because "may I" and "I am taking it" must never be able to disagree -- a
+	// consumer that asks grip.can and then claims has to get the same answer twice.
+	//
+	// The order matters and each line is a rule somebody has to be able to point at:
+	private bool wouldWin(int s, Name asker, int prio) const
+	{
+		if (!slotLive(s))          return true;    // free, or the holder lapsed
+		if (mOwner[s] == asker)    return true;    // a renewal is not a contest
+		// The pouch exception, kept verbatim from PROTOCOL 2 (see grip.claim below).
+		// A hand in the pouch is reaching, not holding, and the reload takes it over
+		// from the holsters. Removing this would re-break the carry.
+		if (mSubject[s] == GRIPSUBJ_Pouch) return true;
+		if (!mPreempt[s])          return false;   // the holder said it cannot be interrupted
+		return prio > mPrio[s];                    // strictly stronger, so ties keep the incumbent
 	}
 
 	// -1 for a bad index, so a caller that passes nonsense gets the same
@@ -255,12 +384,208 @@ class RS_GripArbiterService : Service
 			// holsters' pouch exit cleared the field and handed the gun
 			// back mid-carry. The displaced owner sees grip.mine == 0 and
 			// stands down until the taker releases.
-			if (slotLive(s) && mOwner[s] != nameArg && mSubject[s] != GRIPSUBJ_Pouch) return 0;
+			//
+			// That rule now lives inside wouldWin() so that this request and
+			// grip.claimex cannot drift apart. A PROTOCOL 2 claim asks at
+			// PRIO_LEGACY, which loses to every named class and pre-empts
+			// nothing, so this answers exactly what it answered before.
+			if (!wouldWin(s, nameArg, PRIO_LEGACY)) return 0;
+
+			bool taking = (mOwner[s] != 'None' && mOwner[s] != nameArg);
+			if (taking) clearSlot(s, nameArg);
 
 			mOwner[s]   = nameArg;
 			mSubject[s] = int(doubleArg);
-			mTic[s]     = level.time;
+			mTic[s]     = level.realtime;
+			mPrio[s]    = PRIO_LEGACY;
+			mPreempt[s] = false;
+			mObject[s]  = null;
+			mAttach[s]  = 'None';
 			return 1;
+		}
+
+		// CLAIM, WITH A CLASS AND A PROMISE -- the PROTOCOL 3 form. Same two
+		// identifying arguments; the extra facts ride in stringArg because the
+		// signature has no room left:
+		//
+		//     doubleArg = the GRIPSUBJ_* subject, exactly as grip.claim
+		//     stringArg = "<prio> <preemptable> <attach>", space separated.
+		//                 prio is one of the PRIO_* values above (or any int --
+		//                 the ladder is a convention, not an enum, so a mod may
+		//                 sit between two rungs without editing this file).
+		//                 preemptable is 1 or 0. attach is a name the claimant
+		//                 chooses and nothing here reads. All three optional,
+		//                 left to right.
+		//
+		// The OBJECT cannot ride in stringArg, so it is set by a separate
+		// grip.object request right after a grant. Two calls, but a claim with
+		// no object is the common case and this keeps it one call.
+		//
+		// Returns 1 granted, 0 denied, -1 bad hand. Identical contract to
+		// grip.claim, so a consumer can move to this request without changing
+		// how it reads the answer.
+		if (request == "grip.claimex")
+		{
+			if (s < 0) return -1;
+
+			int  prio   = PRIO_HELD;     // the sane default: something is in the hand
+			bool canPre = false;         // and nothing may take it unless you say so
+			Name attach = 'None';
+			if (stringArg.Length() > 0)
+			{
+				Array<String> f;
+				stringArg.Split(f, " ", TOK_SKIPEMPTY);
+				if (f.Size() > 0) prio   = f[0].ToInt();
+				if (f.Size() > 1) canPre = (f[1].ToInt() != 0);
+				if (f.Size() > 2) attach = f[2];
+			}
+
+			if (!wouldWin(s, nameArg, prio)) return 0;
+
+			bool taking = (mOwner[s] != 'None' && mOwner[s] != nameArg);
+			if (taking) clearSlot(s, nameArg);
+
+			mOwner[s]   = nameArg;
+			mSubject[s] = int(doubleArg);
+			mTic[s]     = level.realtime;
+			mPrio[s]    = prio;
+			mPreempt[s] = canPre;
+			mAttach[s]  = attach;
+			// mObject is deliberately NOT cleared on a renewal: a consumer that
+			// re-asserts every tic would otherwise have to re-send the object
+			// every tic too. A genuine takeover cleared it through clearSlot above.
+			return 1;
+		}
+
+		// WOULD I GET IT? Asks the identical question grip.claimex asks and takes
+		// nothing. stringArg carries the priority alone (default PRIO_HELD). For a
+		// consumer deciding whether to START something it cannot cheaply undo --
+		// a draw animation, a pull -- rather than discovering halfway through.
+		if (request == "grip.can")
+		{
+			if (s < 0) return -1;
+			int prio = (stringArg.Length() > 0) ? stringArg.ToInt() : PRIO_HELD;
+			return wouldWin(s, nameArg, prio) ? 1 : 0;
+		}
+
+		// HOW STRONG IS THE CURRENT CLAIM? The winner's class, or 0 (PRIO_LEGACY)
+		// for a hand that is free or held by a PROTOCOL 2 consumer -- which read
+		// the same, deliberately: both mean "nothing here outranks you".
+		if (request == "grip.prio")
+		{
+			if (s < 0) return -1;
+			return slotLive(s) ? mPrio[s] : PRIO_LEGACY;
+		}
+
+		// CAN THE CURRENT CLAIM BE TAKEN AT ALL? 1 yes, 0 no (and 0 for a free
+		// hand, which cannot be "taken" because there is nothing to take).
+		if (request == "grip.preempt")
+		{
+			if (s < 0) return -1;
+			return (slotLive(s) && mPreempt[s]) ? 1 : 0;
+		}
+
+		// DID I JUST LOSE THIS HAND? 1 if the asker was the previous owner and the
+		// loss is recent (within one lease), else 0. This is how a pre-empted
+		// consumer finds out WITHOUT polling grip.mine and guessing why it went
+		// false -- a lapse, a release it forgot it made, and a takeover all look
+		// identical through grip.mine, and they call for three different responses.
+		if (request == "grip.lost")
+		{
+			if (s < 0) return -1;
+			if (mPrevOwner[s] != nameArg) return 0;
+			int age = level.realtime - mLostTic[s];
+			return (age >= 0 && age <= LEASE_TICS) ? 1 : 0;
+		}
+
+		// ------------------------------------------------------------------
+		// THE SLOT FORM, for the two requests that need objectArg for something
+		// other than the pawn.
+		//
+		// Every request above spends objectArg on "which player". A request that
+		// must also name an ACTOR has nowhere to put it, so those take the slot
+		// index in intArg instead and leave objectArg free. grip.slot converts;
+		// grip.whohas returns one already. Nothing else about the vocabulary
+		// changes, and a slot index is only ever a handle -- it is not stable
+		// across anything and must not be stored.
+		// ------------------------------------------------------------------
+
+		// WHICH SLOT IS THIS HAND? -1 for a bad pawn or hand, same as everything
+		// else. The only way a consumer should ever obtain a slot index.
+		if (request == "grip.slot") return s;
+
+		// PUT THIS OBJECT IN THE HAND. intArg = slot, objectArg = the actor,
+		// nameArg = you. Only the live owner may, so a mod cannot describe a hand
+		// it does not hold. Pass null to clear. 1 done, 0 not yours.
+		if (request == "grip.setobject")
+		{
+			int t = intArg;
+			if (t < 0 || t >= SLOTS) return -1;
+			if (!slotLive(t) || mOwner[t] != nameArg) return 0;
+			mObject[t] = Actor(objectArg);
+			return 1;
+		}
+
+		// IS ANY HAND HOLDING THIS PARTICULAR THING? Ownership-blind, because the
+		// question "who is carrying the thing I want" is asked BY the mod that
+		// does not have it. objectArg is the ACTOR here, so the hand cannot be
+		// derived -- it answers across both hands of every player and returns the
+		// slot index, or -2 for "nobody". -2 and not -1, because -1 already means
+		// "I do not speak this request" and a caller must be able to tell a real
+		// "no" from an unsupported question.
+		if (request == "grip.whohas")
+		{
+			let mo = Actor(objectArg);
+			if (mo == null) return -2;
+			for (int i = 0; i < SLOTS; i++)
+			{
+				if (slotLive(i) && objectOf(i) == mo) return i;
+			}
+			return -2;
+		}
+
+		// ------------------------------------------------------------------
+		// THE HOUSEKEEPING REQUESTS. Called by the companion handler
+		// (rs_griparbitertick.zs) and by nothing else. They are here rather than
+		// on a second class because the state is private and ZScript has no
+		// friendship -- a handler that could not reach it would mean making the
+		// arrays public, which is the one thing this file exists to prevent.
+		// ------------------------------------------------------------------
+
+		// DROP EVERY CLAIM. For a map change or a savegame load: realtime restarts
+		// at 0 there, so a stamp from before the boundary is either negative-aged
+		// (caught by slotLive) or merely small and good for another two seconds --
+		// and two seconds of a hand owned by a mod that no longer exists is how
+		// the jam this lease was built to prevent gets back in through the door.
+		if (request == "grip.clearall")
+		{
+			for (int i = 0; i < SLOTS; i++)
+			{
+				clearSlot(i);
+				mPrevOwner[i] = 'None';
+				mLostTic[i]   = -100000;
+				mNearTic[i]   = -100000;
+			}
+			return 1;
+		}
+
+		// SWEEP. Once a tic: drop the reference to anything that has been
+		// destroyed, and retire a lapsed claim's bookkeeping. Without this a slot
+		// that nobody ever asks about again keeps a dead actor pointer for the
+		// rest of the map. Returns how many slots it touched, for the debug line.
+		if (request == "grip.sweep")
+		{
+			int n = 0;
+			for (int i = 0; i < SLOTS; i++)
+			{
+				if (mObject[i] != null && mObject[i].bDestroyed) { mObject[i] = null; n++; }
+				// A lapsed lease already READS as free everywhere, because every
+				// read goes through slotLive. Clearing it here is what makes the
+				// previous-owner record correct: a consumer that let its claim
+				// expire should be able to learn that it lost the hand.
+				if (mOwner[i] != 'None' && !slotLive(i)) { clearSlot(i); n++; }
+			}
+			return n;
 		}
 
 		// IS THIS HAND MINE? The one question the old scheme could not answer,
@@ -303,9 +628,11 @@ class RS_GripArbiterService : Service
 			if (s < 0) return -1;
 			if (!slotLive(s) || mOwner[s] != nameArg) return 0;
 
-			mOwner[s]   = 'None';
-			mSubject[s] = 0;
-			mTic[s]     = 0;
+			// Through clearSlot, so the five PROTOCOL 3 fields cannot be left
+			// behind by this path and found by the next claimant. That exact
+			// shape -- a release that forgot one field -- is how mSubject
+			// outlived its owner under PROTOCOL 1.
+			clearSlot(s);
 			return 1;
 		}
 
@@ -314,7 +641,12 @@ class RS_GripArbiterService : Service
 		if (request == "grip.near")
 		{
 			if (s < 0) return -1;
-			mNearTic[s] = (doubleArg > 0) ? level.time : -1000;
+			// realtime, for the same reason as the lease -- and here it is not a
+			// nicety. Stamped on level.time, a freeze stops the clock, the age
+			// below stays 0 forever, and a hand that left a part an hour ago
+			// still reads as inside it. The caller stopping must be able to mean
+			// it stopped.
+			mNearTic[s] = (doubleArg > 0) ? level.realtime : -100000;
 			return 1;
 		}
 
@@ -322,7 +654,7 @@ class RS_GripArbiterService : Service
 		if (request == "grip.nearq")
 		{
 			if (s < 0) return -1;
-			int age = level.time - mNearTic[s];
+			int age = level.realtime - mNearTic[s];
 			return (age >= 0 && age <= 1) ? 1 : 0;
 		}
 
@@ -373,5 +705,43 @@ class RS_GripArbiterService : Service
 			return String.Format("%.4f %.4f %.4f", c.x, c.y, c.z);
 		}
 		return "";
+	}
+
+	// THE THREE NAMES A SLOT CARRIES. Same identifying arguments as the ledger
+	// (objectArg pawn, intArg hand). 'None' is the answer for a free hand, for a
+	// bad hand, and for a request this does not speak -- the -1 convention has no
+	// equivalent in a Name, and inventing one ('Unknown'?) would be a value a
+	// caller could collide with. A consumer that must tell "absent" from "free"
+	// asks grip.hello first, which is what it already does.
+	override Name GetName(String request, string stringArg, int intArg, double doubleArg, Object objectArg, Name nameArg)
+	{
+		int s = slotOf(objectArg, intArg);
+		if (s < 0) return 'None';
+
+		// WHO HOLDS THIS HAND. The question every consumer answered by guessing
+		// from a shared int for a year.
+		if (request == "grip.owner")  return slotLive(s) ? mOwner[s] : 'None';
+
+		// WHERE ON THE OBJECT. The claimant's own word; nothing here reads it.
+		if (request == "grip.attach") return slotLive(s) ? mAttach[s] : 'None';
+
+		// WHO HELD IT BEFORE, whether or not anyone holds it now. Deliberately
+		// NOT gated on slotLive: the whole use of this is after the hand went
+		// free. Paired with grip.lost, which says whether it was recent.
+		if (request == "grip.prev")   return mPrevOwner[s];
+
+		return 'None';
+	}
+
+	// WHAT IS IN THE HAND. objectArg pawn, intArg hand; null for free, for a bad
+	// hand, for an object that has since been destroyed, and for an unknown
+	// request. A destroyed actor is NOT null in ZScript, so this goes through
+	// objectOf rather than returning the array entry.
+	override Object GetObject(String request, string stringArg, int intArg, double doubleArg, Object objectArg, Name nameArg)
+	{
+		if (request != "grip.object") return null;
+		int s = slotOf(objectArg, intArg);
+		if (s < 0 || !slotLive(s)) return null;
+		return objectOf(s);
 	}
 }

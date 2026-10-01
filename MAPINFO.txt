@@ -40,7 +40,15 @@
 // `handler = LastEventHandler; handler; handler = handler->prev`. Nothing here
 // overrides InputProcess today, so it is currently moot; the day one of these
 // does, it will be polled in the reverse of the order written above.
+//
+// RS_GripArbiterTick IS THE ONE EXCEPTION TO "NOBODY DECLARES AN ORDER", and it
+// is written last here only to match where it ends up. It calls SetOrder(10000)
+// in OnRegister, and EventManager::RegisterHandler links a handler before the
+// first one with a strictly GREATER order (events.cpp:288-294) -- so every entry
+// above keeps Order 0 and registration sequence exactly as before, and this one
+// lands after all of them wherever it is written in this line. Moving it in the
+// list changes nothing; removing SetOrder would.
 GameInfo
 {
-	AddEventHandlers = "RS_MassTable", "RS_HandsAlwaysOn", "RS_OvalEdit", "RS_HandWorldHandler", "RS_GrabPolicy", "RS_Stabilize", "RS_GrabHandler", "RS_Swing", "RS_Held", "RS_Flight", "RS_Pull", "RS_Route", "RS_GrabViz", "RS_WorldFistGiver", "RS_HandNet", "RS_ThrowTest", "RS_TelemReport"
+	AddEventHandlers = "RS_MassTable", "RS_HandsAlwaysOn", "RS_OvalEdit", "RS_HandWorldHandler", "RS_GrabPolicy", "RS_Stabilize", "RS_GrabHandler", "RS_Swing", "RS_Held", "RS_Flight", "RS_Pull", "RS_Route", "RS_GrabViz", "RS_WorldFistGiver", "RS_HandNet", "RS_ThrowTest", "RS_TelemReport", "RS_GripArbiterTick"
 }

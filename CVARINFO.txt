@@ -1130,3 +1130,20 @@ user float rs_hold_dip_max = 4.0;
 // remember a console command before putting a headset on. It costs a handful
 // of prints per throw and nothing at all between them.
 user bool rs_telemetry = true;
+
+// ---- THE GRIP ARBITER (added 2026-10-01 with PROTOCOL 3) -----------------
+//
+// 0 silent. 1 prints a line whenever the once-a-tic sweep actually retires
+// something -- a lease that lapsed, or a reference to an actor the playsim
+// destroyed. 2 adds the full ledger on those same tics: who owns each hand,
+// for what subject, at what priority, pre-emptable or not, and where.
+//
+// IT PRINTS ONLY WHEN SOMETHING CHANGED, at either level. A ledger that prints
+// every tic is a ledger nobody reads: at 35 lines a second the one event you
+// are hunting is off the top of the console before you have seen it.
+//
+// `server` and not `user` deliberately. It is read with GetCVar(name, null),
+// which needs a cvar that is not per-player -- and a debug switch that differs
+// between machines in a netgame produces two different accounts of the same
+// tic, which is worse than no account. Same reasoning as rs_throw_debug.
+server int rs_grip_debug = 0;

@@ -80,6 +80,16 @@ version "5.0.0"
 // has to come out. That is true of all thirty classes here, not just this one.
 #include "zscript/arbiter/rs_griparbiter.zs"
 
+// THE ARBITER'S HEARTBEAT, added 2026-10-01 with PROTOCOL 3. A Service has no
+// Tick, no WorldLoaded and no SetOrder -- it is only ever called when somebody
+// asks it something -- so a lapsed lease was retired only by accident, a
+// destroyed actor's pointer was kept until the same accident, and a map change
+// went by unobserved. This StaticEventHandler is the one thing the Service
+// cannot be: a clock. Unlike the Service it DOES need a MAPINFO entry, and it is
+// private plumbing -- NOTHING OUTSIDE THIS PK3 MAY NAME IT, for exactly the
+// compile-time-coupling reason spelled out above. See the file.
+#include "zscript/arbiter/rs_griparbitertick.zs"
+
 // GRIP POINT ADJUSTMENT FROM THE CONTROLLERS. Hold a key and the sticks move a grip oval
 // instead of the player; see the file for why a menu cannot do this job.
 #include "zscript/hands/rs_ovaledit.zs"
