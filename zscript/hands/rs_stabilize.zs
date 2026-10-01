@@ -565,7 +565,11 @@ class RS_Stabilize : EventHandler
             || arb.GetInt("grip.claim", "", 1, subj, pmo, 'RS_Stabilize') == 1;
         if (!granted) return false;
 
-        pmo.GripClaimOff = subj;
+        // SINCE PROTOCOL 3 THE GRANT ITSELF WRITES THE FIELD, so this does not.
+        // Two writers saying the same thing is how the field and the ledger came
+        // to disagree at all; the direct write stays only for the case it was
+        // always for, this package loaded without the arbiter.
+        if (!arb) pmo.GripClaimOff = subj;
 
         // The HUD hand poses itself from the engine's published subject. The
         // WORLD hand takes its shape from whoever holds it, the way RS_Held
@@ -579,10 +583,14 @@ class RS_Stabilize : EventHandler
     // pose we asked for. More than one system writes each of these.
     private void Release(PlayerPawn pmo)
     {
-        if (pmo && pmo.GripClaimOff == latchedSubject) pmo.GripClaimOff = 0;
-
         let arb = Arbiter();
+
+        // The release takes the field down (PROTOCOL 3), and it is strictly
+        // safer than doing it here: the value compare below cannot tell OUR
+        // forend claim from another mod's, so a brace that had already lost the
+        // hand was blanking the new owner's claim on its way out.
         if (arb && pmo) arb.GetInt("grip.release", "", 1, 0, pmo, 'RS_Stabilize');
+        else if (pmo && pmo.GripClaimOff == latchedSubject) pmo.GripClaimOff = 0;
 
         let hd = RS_HandWorldHandler.Get(1);
         if (hd && hd.poseHold == PoseFor(latchedSubject)) hd.HoldPose(-1);

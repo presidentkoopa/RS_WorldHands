@@ -1480,12 +1480,22 @@ class RS_Held : EventHandler
 			// magazine, or is inside the pouch's claim) had already clobbered
 			// the field -- and ClearClaims, which only clears what grip.mine
 			// says is ours, then left it clobbered after the release.
+			//
+			// AND SINCE PROTOCOL 3 (2026-10-01) THE GRANT ITSELF WRITES THE FIELD.
+			// The arbiter publishes GripClaim* the instant it books the claim, so
+			// writing it here as well would be a second writer saying the same
+			// thing -- and a second writer is the whole bug. The direct write is
+			// kept for the case it was always for: this package loaded without the
+			// arbiter, where nothing else can do it.
 			bool granted = !arbiter
 				|| arbiter.GetInt("grip.claim", "", h, hSubject[IX(pnum, h)], pmo, 'RS_Held') == 1;
 			if (granted)
 			{
-				if (h == HAND_MAIN) pmo.GripClaimMain = hSubject[IX(pnum, h)];
-				else                pmo.GripClaimOff  = hSubject[IX(pnum, h)];
+				if (!arbiter)
+				{
+					if (h == HAND_MAIN) pmo.GripClaimMain = hSubject[IX(pnum, h)];
+					else                pmo.GripClaimOff  = hSubject[IX(pnum, h)];
+				}
 				hClaimed[IX(pnum, h)] = hSubject[IX(pnum, h)];
 			}
 
@@ -1555,7 +1565,12 @@ class RS_Held : EventHandler
 			else
 				ours = ((h == HAND_MAIN) ? pmo.GripClaimMain : pmo.GripClaimOff) == hClaimed[IX(pnum, h)];
 
-			if (ours)
+			// WITH THE ARBITER, THE RELEASE BELOW TAKES THE FIELD DOWN FOR US
+			// (PROTOCOL 3). Zeroing it here as well is the same second-writer
+			// problem in reverse, and it is worse than the set: a release that is
+			// refused -- because the hand is someone else's now -- would still
+			// have blanked THEIR claim. Only the no-arbiter path writes.
+			if (ours && !arbiter)
 			{
 				if (h == HAND_MAIN) pmo.GripClaimMain = GRIPSUBJ_None;
 				else                pmo.GripClaimOff  = GRIPSUBJ_None;

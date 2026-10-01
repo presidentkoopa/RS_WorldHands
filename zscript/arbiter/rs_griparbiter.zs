@@ -88,14 +88,50 @@
 // supplies, and the only question a consumer ever needs to ask -- "is this
 // hand's claim mine?" -- becomes a direct answer instead of a guess.
 //
-// FIRST-COME-WINS, AND NO PRIORITY LADDER. v1's own note anticipated a priority
-// ladder here. Deliberately not built: a ladder means this file must know the
-// names and relative rank of every consumer, which is precisely the
-// compile-time coupling the Service approach exists to avoid, and it solves
-// contention -- a problem this family does not actually have. A claim is held
-// until released or expired. If real contention ever shows up, the vocabulary
-// below can grow a request for it without breaking anyone, which is what the
-// PROTOCOL/-1 contract is for.
+// FIRST-COME-WINS, AND NO PRIORITY LADDER -- TRUE OF v2, NO LONGER TRUE.
+// SUPERSEDED BY PROTOCOL 3, 2026-10-01. Kept rather than deleted because the
+// REASONING still holds and still constrains what may be built here:
+//
+//     "a ladder means this file must know the names and relative rank of every
+//      consumer, which is precisely the compile-time coupling the Service
+//      approach exists to avoid"
+//
+// The ladder added below does NOT do that, and that is the only reason it was
+// allowed. It ranks the CLASS OF A CLAIM, never the claimant: a caller says "I
+// am taking this hand as a MECHANISM" and this file has still never heard of
+// it. The same mod claims at different strengths on different paths. No consumer
+// is named anywhere in this file, and none ever may be.
+//
+// The other half of the old note -- that contention is not a problem this family
+// has -- was simply wrong, and the evidence was already in the tree: two
+// consumers wrote the engine field after being REFUSED, which is contention
+// resolved by shouting. See grip.take.
+//
+// A claim is still held until released or expired, and a tie still keeps the
+// incumbent.
+//
+// ---------------------------------------------------------------------------
+// PROTOCOL 3 (2026-10-01): THE ARBITER WRITES GripClaimMain / GripClaimOff.
+//
+// Through v2 this file wrote no engine field at all -- it was a ledger that
+// asked to be consulted, and five paths wrote the real field themselves. Two of
+// those wrote it after their claim was refused, so the ledger could be entirely
+// correct and the engine still be told something else. Now every ledger change
+// publishes the field on the same instruction (publishSlot), and the consumers
+// below have stopped writing it. Each of them keeps its direct write for the
+// case it was always for: this package absent, and nothing else to do the job.
+//
+// IT ONLY WRITES A SLOT IT HAS AN OPINION ABOUT. A hand nobody has ever claimed
+// through here is never touched, so a mod that has not been converted keeps
+// working exactly as it does today.
+//
+// NOT GrabClaimMain / GrabClaimOff. Those have exactly ONE writer
+// (rs_grab.zs:1189) and it is a pure function of RS_WorldHands' own state --
+// hand full, cone target, pull flying or locked, swap poised. There is no
+// collision to fix, and publishing it from here would mean this file learning
+// what a pull and a swap are, i.e. learning who is asking. That is the one thing
+// the design forbids. The plan said "sole writer of GripClaim*/GrabClaim*"; this
+// is a deliberate departure from the second half of it, with the reason here.
 //
 // THE LEASE EXISTS FOR THE CASE NOBODY CAN CODE AROUND. A consumer that takes
 // a claim and then dies, level-changes, or hits an early return without
@@ -238,6 +274,49 @@ class RS_GripArbiterService : Service
 		let mo = mObject[s];
 		if (mo == null || mo.bDestroyed) return null;
 		return mo;
+	}
+
+	// ---- THE ARBITER WRITES THE ENGINE FIELD (PROTOCOL 3, phase B) --------
+	//
+	// GripClaimMain / GripClaimOff are what the ENGINE reads: the pose subject fed ahead of
+	// holster and hardpoint, and the two values singled out as "still supporting the weapon"
+	// (vk_openxrdevice.cpp). Until now FIVE paths wrote them -- RS_Held, RS_Stabilize,
+	// RS_ShieldSaw, RS_VR_Reload's Claim and its PoseHand -- and two of those wrote after
+	// being refused. The ledger could therefore be perfectly correct and the field still say
+	// something else, which makes the ledger worth nothing to the one reader that matters.
+	//
+	// So the arbiter publishes it, and the consumers stop. Every mutation below ends in
+	// publishSlot, so the ledger and the field change on the SAME INSTRUCTION -- not at the
+	// end of the tic. That matters: three consumers read the field back within the tic they
+	// write it, and a once-a-tic publish would have handed them yesterday's answer and called
+	// it tidying up.
+	//
+	// IT ONLY EVER WRITES A SLOT IT HAS AN OPINION ABOUT. publishSlot is reached from a
+	// claim, a release, an expiry and a level clear -- never from a blanket sweep over all
+	// four slots. A mod that has never spoken to the arbiter keeps writing the field itself
+	// and is not stamped on, which is what lets this ship without finding every writer first.
+	//
+	// The pawn comes from the slot index rather than from the caller, because the slot IS
+	// (player, hand): taking it from whoever happened to ask would let a voodoo doll publish
+	// to itself.
+	// `play` SPELLED OUT, and it is not decoration. Service carries no scope keyword, so a
+	// method declared here with none is DATA-scoped and cannot write playsim state -- the
+	// error is "Expression must be a modifiable value" on the assignment, pointing at the
+	// pawn rather than at the missing keyword. Every other method in this class got away
+	// without it because GetInt and friends inherit `play` from the virtual they override;
+	// this one is the first helper that writes anything outside the ledger.
+	private play void publishSlot(int s)
+	{
+		if (s < 0 || s >= SLOTS) return;
+		int pnum = s / HANDS;
+		int h    = s % HANDS;
+		if (pnum < 0 || pnum >= MAXPLAYERS || !playeringame[pnum]) return;
+		let pmo = players[pnum].mo;
+		if (pmo == null) return;
+
+		int v = slotLive(s) ? mSubject[s] : GRIPSUBJ_None;
+		if (h == 0) pmo.GripClaimMain = v;
+		else        pmo.GripClaimOff  = v;
 	}
 
 	// Clear one slot completely. Every release path goes through this, so a new field added
@@ -401,6 +480,42 @@ class RS_GripArbiterService : Service
 			mPreempt[s] = false;
 			mObject[s]  = null;
 			mAttach[s]  = 'None';
+			publishSlot(s);
+			return 1;
+		}
+
+		// TAKING IT ANYWAY, AND SAYING SO.
+		//
+		// Two consumers have always ignored a denial and written the engine field over the
+		// top: RS_ShieldSaw (the shield IS in the hand by the time it asks) and
+		// RS_VR_Reload's Claim, whose comment states the policy outright -- "a denial is
+		// advice, not a veto, for a gun's own parts: nothing else drives them, and making
+		// the gun unusable is not the answer to someone else holding the hand."
+		//
+		// That policy is defensible and it is NOT being changed here. What was wrong is that
+		// the ledger never heard about it: the arbiter went on reporting the old owner while
+		// the field, the hand and the player all said otherwise, so every consumer reading
+		// grip.owner got a confident wrong answer. A lie in the one place built to stop
+		// guessing is worse than the guessing.
+		//
+		// So an override is a REQUEST now. Same outcome, recorded: the displaced owner lands
+		// in mPrevOwner where grip.lost can find it, and rs_grip_debug shows the takeover.
+		// Always grants on a valid hand -- that is the point of it.
+		//
+		// NOT A SHORTCUT FOR NEW CODE. Anything written from here on asks with grip.claimex
+		// and a priority. This exists to describe what two mods already do, and phase C is
+		// where they stop needing it.
+		if (request == "grip.take")
+		{
+			if (s < 0) return -1;
+			if (mOwner[s] != 'None' && mOwner[s] != nameArg) clearSlot(s, nameArg);
+
+			mOwner[s]   = nameArg;
+			mSubject[s] = int(doubleArg);
+			mTic[s]     = level.realtime;
+			mPrio[s]    = PRIO_LEGACY;
+			mPreempt[s] = false;
+			publishSlot(s);
 			return 1;
 		}
 
@@ -454,6 +569,7 @@ class RS_GripArbiterService : Service
 			// mObject is deliberately NOT cleared on a renewal: a consumer that
 			// re-asserts every tic would otherwise have to re-send the object
 			// every tic too. A genuine takeover cleared it through clearSlot above.
+			publishSlot(s);
 			return 1;
 		}
 
@@ -561,7 +677,13 @@ class RS_GripArbiterService : Service
 		{
 			for (int i = 0; i < SLOTS; i++)
 			{
+				bool had = (mOwner[i] != 'None');
 				clearSlot(i);
+				// Only a slot somebody actually held is published back as free. A
+				// hand the arbiter never had an opinion about is left alone, so a
+				// mod that writes the field itself and never talks to us is not
+				// stamped on at every level boundary.
+				if (had) publishSlot(i);
 				mPrevOwner[i] = 'None';
 				mLostTic[i]   = -100000;
 				mNearTic[i]   = -100000;
@@ -583,7 +705,10 @@ class RS_GripArbiterService : Service
 				// read goes through slotLive. Clearing it here is what makes the
 				// previous-owner record correct: a consumer that let its claim
 				// expire should be able to learn that it lost the hand.
-				if (mOwner[i] != 'None' && !slotLive(i)) { clearSlot(i); n++; }
+				// And it is the only thing that takes the engine field back down
+				// when a claimant simply died: the owner is not there to release,
+				// so without this the hand reads as held for the rest of the map.
+				if (mOwner[i] != 'None' && !slotLive(i)) { clearSlot(i); publishSlot(i); n++; }
 			}
 			return n;
 		}
@@ -633,6 +758,7 @@ class RS_GripArbiterService : Service
 			// shape -- a release that forgot one field -- is how mSubject
 			// outlived its owner under PROTOCOL 1.
 			clearSlot(s);
+			publishSlot(s);
 			return 1;
 		}
 
