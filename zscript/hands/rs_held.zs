@@ -128,10 +128,14 @@ class RS_Held : EventHandler
 	// has to be given back exactly -- an object that comes back a little
 	// different every time it is picked up and dropped is a slow leak nobody
 	// can see happening.
-	// The renderer's own conversion between the world frame and a controller's,
-	// from models.cpp. A const rather than a literal because it appears in two
-	// places that must never disagree.
-	const FOLLOWHAND_UNIT_SCALE = 0.01;
+	// [HANDUNITS 2026-10-02] REMOVED. This was the renderer's old conversion between the
+	// world frame and a controller's, and its last user is gone -- see the note in the
+	// follow-hand block below. The engine now divides vr_vunits_per_meter back out on the
+	// hand path, so both frames are map units and there is no conversion to mirror.
+	//
+	// DELETED RATHER THAN SET TO 1, deliberately. A constant named for a conversion that no
+	// longer happens is worse than no constant: the next person to need a hand-unit number
+	// finds it, assumes it is current, and reintroduces the factor it used to apply.
 
 	private Vector2 hSavedScale[MAXPLAYERS * 2];
 	private bool hSavedSpecial[MAXPLAYERS * 2];
@@ -980,10 +984,32 @@ class RS_Held : EventHandler
 			// tic: a hundredfold, then ten thousand, then a million -- and saved each
 			// grown size as the one to restore, so a caught object vanished into its
 			// own size and stayed enormous after it was put down.
+			// [HANDUNITS 2026-10-02] THE x100 IS GONE. THE RATIO IS NOW 1.
+			//
+			// This divided by FOLLOWHAND_UNIT_SCALE (0.01), i.e. multiplied the held
+			// object's Scale by a HUNDRED, to compensate for a hand frame that used to
+			// draw one model unit at 0.34 map units while the floor drew it at 1.
+			//
+			// The engine no longer does that: ObjectToWorldMatrix divides
+			// vr_vunits_per_meter back out on the hand path too (models.cpp), so BOTH
+			// frames are map units and there is nothing left to compensate for. The x100
+			// is pure leftover, and it is why a picked-up barrel or medikit was drawn a
+			// hundred times its floor size -- which reads as "it disappeared", because an
+			// object that large is all you can see and has no recognisable silhouette.
+			//
+			// RS_VR_Reload migrated through this same problem first and set
+			// wm_world_factor to 1.0 for exactly this reason (loose.zs); the two packages
+			// now agree, which they did not while this stood.
+			//
+			// THE SAVE STAYS, and it is not redundant. An object can be scaled by
+			// something else while it is held -- a mod, a pickup effect -- and it still
+			// has to be given back exactly what it came with. The save also remains the
+			// guard against the original bug in this block: it used to scale EVERY tic,
+			// a hundredfold then ten thousand then a million, and saved each grown size
+			// as the one to restore.
 			if (!hFollowScaled[hand])
 			{
 				hSavedScale[IX(pnum, hand)] = a.Scale;
-				a.Scale = (a.Scale.x / FOLLOWHAND_UNIT_SCALE, a.Scale.y / FOLLOWHAND_UNIT_SCALE);
 				hFollowScaled[hand] = true;
 			}
 			// NO PlacementPrefix. There is one held-object seat for every class

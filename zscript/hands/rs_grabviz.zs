@@ -127,6 +127,23 @@ class RS_GrabViz : EventHandler
     private RS_GaugeBase viz[2];
     private RS_VolumeBox vol[2];
 
+    // THE TWO BEAM SLOTS THIS PACKAGE OWNS, CLAIMED RATHER THAN ASSUMED (2026-10-02).
+    //
+    // This used to write slots 0 and 1 directly and say so in a comment -- "anything else
+    // wanting beams must start at 2" -- which is a convention, not a mechanism. Nothing
+    // enforced it and nothing could: there is no way to read a slot back. RS_Lance claims
+    // four slots for a lance and a cook beam, and the weapon wheel's constellation draws its
+    // own, so "start at 2" was a request two other packages had no way to hear.
+    //
+    // ClaimBeam searches from 127 down and never returns below 2, so a claim cannot collide
+    // with anything and cannot be collided with.
+    //
+    // -1 means not claimed. ALL OR NOTHING: a single beam of a two-beam ray is worse than
+    // none, because it reads as one hand's laser having broken rather than as the feature
+    // being switched off.
+    private int gvBeam[2];
+    private bool gvClaimed;
+
     // THE MASTER SCALE IS NO LONGER PINNED AT LEVEL LOAD, and removing that is
     // the point of this comment surviving where the code did not.
     //
@@ -439,12 +456,48 @@ class RS_GrabViz : EventHandler
     // its volume with 84 beams per hand rebuilt every tic and destroyed the
     // framerate, so the count matters more than the shape.
     //
-    // SetBeamCount is global to the level and cannot be read back, so this
-    // claims slots 0 and 1 and anything else wanting beams must start at 2.
-    // Said out loud because a silent clash reads as beams flickering for no
-    // reason at all.
+    // [SUPERSEDED 2026-10-02] This used to read: "SetBeamCount is global to the level and
+    // cannot be read back, so this claims slots 0 and 1 and anything else wanting beams must
+    // start at 2." That was a REQUEST, not a claim. Nothing enforced it and nothing could,
+    // and the two packages it was addressed to had no way to hear it. The slots are really
+    // claimed now.
+
+    // CLAIM BOTH, OR NEITHER. Called every tic before the beams are drawn; cheap once held,
+    // because the first test short-circuits.
+    //
+    // THE RE-CLAIM IS NOT OPTIONAL. Claims do not survive a map change or a savegame load
+    // (doombase.zs), so a slot held before a door is not held after it -- and an index kept
+    // across that boundary points at a slot something else may now own. IsBeamClaimed is the
+    // check the engine documents for exactly this.
+    private bool ClaimBeams()
+    {
+        if (gvClaimed && gvBeam[0] >= 0 && gvBeam[1] >= 0
+            && Level.IsBeamClaimed(gvBeam[0]) && Level.IsBeamClaimed(gvBeam[1]))
+            return true;
+
+        int s0 = Level.ClaimBeam(null);
+        int s1 = Level.ClaimBeam(null);
+        if (s0 < 0 || s1 < 0)
+        {
+            // Give back whichever half we got. Holding one slot we cannot use is worse than
+            // holding none: it is leaked for the rest of the map.
+            if (s0 >= 0) Level.ReleaseBeam(s0);
+            if (s1 >= 0) Level.ReleaseBeam(s1);
+            gvBeam[0] = -1;
+            gvBeam[1] = -1;
+            gvClaimed = false;
+            return false;
+        }
+
+        gvBeam[0] = s0;
+        gvBeam[1] = s1;
+        gvClaimed = true;
+        return true;
+    }
+
     private void DrawAimBeams(PlayerPawn pmo, PlayerInfo p)
     {
+        if (!ClaimBeams()) return;
         if (!RS_Reach.Flag("rs_dgrab_beam", p, true)
             || !RS_Reach.Flag("rs_dgrab", p, true)
             || !RS_Reach.Flag("rs_grab", p, true)     // the master switch: RS_Pull aborts on it, the ray must too
@@ -463,8 +516,8 @@ class RS_GrabViz : EventHandler
             // sitting at the origin.
             if (beamsOn)
             {
-                Level.SetBeam(0, (0,0,0), (0,0,0), 0, 0, 0x000000, 0);
-                Level.SetBeam(1, (0,0,0), (0,0,0), 0, 0, 0x000000, 0);
+                Level.SetBeam(gvBeam[0], (0,0,0), (0,0,0), 0, 0, 0x000000, 0);
+                Level.SetBeam(gvBeam[1], (0,0,0), (0,0,0), 0, 0, 0x000000, 0);
                 beamsOn = false;
             }
             return;
@@ -488,15 +541,23 @@ class RS_GrabViz : EventHandler
         // this owns the beam look for everything, and anything else wanting
         // beams inherits it. Nothing else in the load uses them; said out loud
         // because a silent clash reads as the laser randomly changing character.
-        Level.SetBeamCount(2,
-            RS_Reach.Num("rs_beam_glow", p, 0.35),
-            RS_Reach.Num("rs_beam_fog",  p, 0.2));
-        Level.SetBeamLook(
-            RS_Reach.Num("rs_beam_airglow", p, 1.0),
-            RS_Reach.Num("rs_beam_scroll",  p, 6.0),
-            RS_Reach.Num("rs_beam_depth",   p, 0.25),
-            RS_Reach.Num("rs_beam_taper",   p, 0.35),
-            RS_Reach.Num("rs_beam_flare",   p, 1.5));
+        // PER SLOT, NOT PER LEVEL (2026-10-02). SetBeamCount and SetBeamLook are both
+        // LEVEL-WIDE and neither can be read back, so calling them every tic meant this
+        // package silently owned the look of every beam in the game -- it erased RS_Lance's
+        // and collided with the weapon wheel's constellation, and the symptom was somebody
+        // else's beam appearing to change character for no reason.
+        //
+        // SetBeamStyleScroll rather than SetBeamStyle because of the scroll DEPTH: the scene
+        // default of 0.25 beads a beam, and leaking that onto a lance is exactly the class of
+        // bug being removed here.
+        double aglow  = RS_Reach.Num("rs_beam_airglow", p, 1.0);
+        double scroll = RS_Reach.Num("rs_beam_scroll",  p, 6.0);
+        double depth  = RS_Reach.Num("rs_beam_depth",   p, 0.25);
+        double taper  = RS_Reach.Num("rs_beam_taper",   p, 0.35);
+        double flare  = RS_Reach.Num("rs_beam_flare",   p, 1.5);
+        double halo   = RS_Reach.Num("rs_beam_glow",    p, 0.35);
+        for (int bs = 0; bs < 2; bs++)
+            Level.SetBeamStyleScroll(gvBeam[bs], aglow, halo, taper, flare, scroll, depth);
 
         // EVERY STATE IS ITS OWN LINE. Idle, candidate and locked each carry a
         // colour, a thickness and an opacity, because they are three different
@@ -546,7 +607,7 @@ class RS_GrabViz : EventHandler
                 double tol = RS_Reach.Num("rs_dgrab_palm_tol",  p, 30.0);
                 if (abs(rl - tgt) > tol)
                 {
-                    Level.SetBeam(h, (0,0,0), (0,0,0), 0, 0, 0x000000, 0);
+                    Level.SetBeam(gvBeam[h], (0,0,0), (0,0,0), 0, 0, 0x000000, 0);
                     continue;
                 }
             }
@@ -556,7 +617,7 @@ class RS_GrabViz : EventHandler
             {
                 // Zero length AND zero intensity -- either alone still leaves a
                 // dot sitting at the origin.
-                Level.SetBeam(h, (0,0,0), (0,0,0), 0, 0, 0x000000, 0);
+                Level.SetBeam(gvBeam[h], (0,0,0), (0,0,0), 0, 0, 0x000000, 0);
                 continue;
             }
 
@@ -590,9 +651,9 @@ class RS_GrabViz : EventHandler
                 // palm. Pointing at a thing and hauling it in stop looking like
                 // the same act, which is the whole job of the lock state.
                 if (lk && reel)
-                    Level.SetBeam(h, b, a, th, soft, col, al);
+                    Level.SetBeam(gvBeam[h], b, a, th, soft, col, al);
                 else
-                    Level.SetBeam(h, a, b, th, soft, col, al);
+                    Level.SetBeam(gvBeam[h], a, b, th, soft, col, al);
             }
             else
             {
@@ -603,7 +664,7 @@ class RS_GrabViz : EventHandler
                 // the aiming problem it solves, and only you can say.
                 if (!RS_Reach.Flag("rs_beam_idle_show", p, true))
                 {
-                    Level.SetBeam(h, (0,0,0), (0,0,0), 0, 0, 0x000000, 0);
+                    Level.SetBeam(gvBeam[h], (0,0,0), (0,0,0), 0, 0, 0x000000, 0);
                     continue;
                 }
 
@@ -615,7 +676,7 @@ class RS_GrabViz : EventHandler
                 if (len <= 0) len = RS_Reach.Num("rs_dgrab_reach", p, 512.0);
 
                 Vector3 b = a + RS_Cone.Dir(pmo, h) * len;
-                Level.SetBeam(h, a, b,
+                Level.SetBeam(gvBeam[h], a, b,
                     RS_Reach.Num("rs_beam_idle_thick", p, 0.4), soft,
                     RS_Reach.Col("rs_beam_idle_color", p, 0x506070),
                     RS_Reach.Num("rs_beam_idle_alpha", p, 0.35));
