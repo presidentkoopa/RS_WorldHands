@@ -505,16 +505,48 @@ class RS_GripArbiterService : Service
 		// NOT A SHORTCUT FOR NEW CODE. Anything written from here on asks with grip.claimex
 		// and a priority. This exists to describe what two mods already do, and phase C is
 		// where they stop needing it.
+		//
+		// A TAKE NOW CARRIES A RANK, AND A TAKE CANNOT BREAK A STRONGER ONE (2026-10-04).
+		//
+		// Both callers took at PRIO_LEGACY and cleared the slot without ever asking who was
+		// in it, so when they wanted the same hand on the same tic the winner was whichever
+		// ran LAST -- not a decision, an ordering accident. The off hand went to the weapon
+		// mechanism because its claim happens after the shield's.
+		//
+		// stringArg is read exactly as grip.claimex reads it ("<prio> <preemptable>"), and
+		// omitting it means PRIO_LEGACY and preemptable=false -- byte-for-byte the old
+		// behaviour, so a caller that is not updated is not affected. The single new rule is
+		// the guard below: a take still overrides a denial, still overrides an equal, and
+		// still overrides anything weaker, but it will not tear out a claim that outranks it.
+		//
+		// This ranks the CLASS of a claim and never the claimant; no mod is named here. Any
+		// consumer that must not be dispossessed takes at a rung above its rivals and gets
+		// the same protection.
 		if (request == "grip.take")
 		{
 			if (s < 0) return -1;
+
+			int  takePrio = PRIO_LEGACY;
+			bool takePre  = false;
+			if (stringArg.Length() > 0)
+			{
+				Array<String> f;
+				stringArg.Split(f, " ", TOK_SKIPEMPTY);
+				if (f.Size() > 0) takePrio = f[0].ToInt();
+				if (f.Size() > 1) takePre  = (f[1].ToInt() != 0);
+			}
+
+			// Strictly stronger incumbent keeps the hand. Ties still go to the taker, which
+			// is what every existing pairing is, so nothing that worked yesterday changes.
+			if (slotLive(s) && mOwner[s] != nameArg && mPrio[s] > takePrio) return 0;
+
 			if (mOwner[s] != 'None' && mOwner[s] != nameArg) clearSlot(s, nameArg);
 
 			mOwner[s]   = nameArg;
 			mSubject[s] = int(doubleArg);
 			mTic[s]     = level.realtime;
-			mPrio[s]    = PRIO_LEGACY;
-			mPreempt[s] = false;
+			mPrio[s]    = takePrio;
+			mPreempt[s] = takePre;
 			publishSlot(s);
 			return 1;
 		}
