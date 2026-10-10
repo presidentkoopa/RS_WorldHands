@@ -537,12 +537,41 @@ class RS_Stabilize : EventHandler
         Weapon ow = p.OffhandWeapon;
         if (ow && !RS_HandFist.IsFistClass(ow.GetClass())) return true;
 
+        // ASK THE ARBITER; DO NOT READ VALUES OFF THE FIELD (CODER_PLAN step 56).
+        //
+        // This compared GripClaimOff against five subject values to infer "the hand is
+        // mid-reload". That is a SHADOW LEDGER -- the exact fault the arbiter phases removed
+        // everywhere else, and it has already cost this family once: RS_VR_Reload's PoseHand
+        // decided ownership by the same kind of value test, and because rs_grabpolicy hands
+        // every Ammo, Health, Armor, Inventory and barrel pickup GRIPSUBJ_Magazine, a HEALTH
+        // PACK in the off hand read as ours (fixed in step 35 by asking the arbiter).
+        //
+        // THE SAME FALSE POSITIVE IS LIVE HERE: a medkit in the off hand publishes
+        // GRIPSUBJ_Magazine, so bracing was refused while the hand held nothing but a
+        // medkit. Asking "would a brace win this hand" is both correct and shorter -- it
+        // covers the reload, the pouch, the shield and anything added later, without this
+        // file knowing what any of them are.
+        //
+        // PRIO_BRACE because that is what this is. The ladder's own description of that rung
+        // is "a brace 60 yields to anything that holds", which is exactly the answer wanted.
+        let arb = Arbiter();
+        if (arb && !multiplayer)
+            return arb.GetInt("grip.can", "" .. STAB_PRIO_BRACE, 1, 0, pmo, 'RS_Stabilize') == 0;
+
+        // NO ARBITER, OR A NETGAME: the old value test, unchanged. In a netgame the ledger
+        // is built from hand poses, which are local, so a shared decision must not branch on
+        // it; and with no arbiter present there is nothing else to ask.
         int claim = pmo.GripClaimOff;
         if (claim == GRIPSUBJ_Round || claim == GRIPSUBJ_Shell || claim == GRIPSUBJ_Inserting
          || claim == GRIPSUBJ_Magazine || claim == GRIPSUBJ_Pouch)
             return true;
         return false;
     }
+
+    // Mirrors RS_GripArbiterService.PRIO_BRACE. Inlined for the same reason RS_Pull inlines
+    // PRIO_INBOUND: naming the arbiter's own constant would be a compile-time dependency on
+    // its file, which is fatal AND GLOBAL if that file is absent.
+    const STAB_PRIO_BRACE = 60;
 
     // ---- latching -------------------------------------------------------
     private static int PoseFor(int subj)
@@ -560,9 +589,18 @@ class RS_Stabilize : EventHandler
     // else owns the hand now, and the brace ends.
     private bool Claim(PlayerPawn pmo, int subj)
     {
+        // CLAIMED AT PRIO_BRACE, NOT PRIO_LEGACY (step 56). grip.claim is the PROTOCOL 2
+        // form and books at the bottom of the ladder, so a brace was indistinguishable from
+        // any unclassified claim -- and the ladder was written with a rung for this.
+        //
+        // PREEMPTABLE, deliberately, and it is the one claim in this family that should be.
+        // The ladder's own words: "a brace 60 yields to anything that holds". Your off hand
+        // steadying a rifle must give way the instant that hand is needed to actually hold
+        // something -- a magazine, the shield, a barrel -- without the brace having to
+        // notice and stand down by itself.
         let arb = Arbiter();
         bool granted = !arb
-            || arb.GetInt("grip.claim", "", 1, subj, pmo, 'RS_Stabilize') == 1;
+            || arb.GetInt("grip.claimex", STAB_PRIO_BRACE .. " 1 brace", 1, subj, pmo, 'RS_Stabilize') == 1;
         if (!granted) return false;
 
         // SINCE PROTOCOL 3 THE GRANT ITSELF WRITES THE FIELD, so this does not.
