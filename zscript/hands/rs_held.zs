@@ -460,6 +460,45 @@ class RS_Held : EventHandler
 	{
 		if (!CanTake(pnum, hand, a, twohand, p)) return TAKE_REFUSED;
 
+		// ASK THE ARBITER BEFORE TAKING THE HAND (CODER_PLAN step 56).
+		//
+		// THE TAKE USED TO BE UNCONDITIONAL and the claim came AFTERWARDS: the loop
+		// further down asks `grip.claim` every tic while holding, and when that is
+		// denied -- the hand is carrying a reload magazine, is inside the pouch, or
+		// the shield has it -- the object is held anyway and only `hClaimed` stays 0.
+		// So this package could take a hand another package owned, and the arbiter
+		// would go on correctly reporting the other owner while the hand did this.
+		// review_hands #2 named it: Take and CanTake make no arbiter call.
+		//
+		// grip.can IS THE RIGHT REQUEST because it runs the arbiter's own wouldWin --
+		// the same function a claim runs -- so "may I" and "I am taking it" cannot
+		// disagree. The arbiter's file says that outright and it is why grip.can
+		// exists. PRIO_HELD (70) is grip.can's default and the honest class for this:
+		// something is in the hand. A gun part mid-rack at 80 still beats it, which is
+		// the ladder working rather than a special case.
+		//
+		// NOT FOLDED INTO CanTake, deliberately. That is documented as a TRUE
+		// PREDICATE -- const, reads nothing that changes, same answer twice -- and its
+		// own comment explains at length why every input it has is identical on every
+		// machine. The arbiter is neither: a const method cannot call a non-const
+		// Service through a readonly self, and the ledger is not guaranteed equal
+		// across peers (see the multiplayer gate below). A prompt may therefore still
+		// offer a grab that Take refuses, which is strictly better than today, where
+		// Take refuses on arbiter grounds never.
+		//
+		// SINGLE PLAYER ONLY, AND THAT IS NOT TIMIDITY. Arbiter claims are made by
+		// consumers driven by hand poses, and a hand pose is local -- so in a netgame
+		// the ledger can legitimately differ between machines. Gating a playsim
+		// decision on it would make the take happen on one machine and not another,
+		// which is the exact disagreement the command path exists to remove. In
+		// multiplayer the behaviour is unchanged.
+		if (!multiplayer && arbiter && (hand == HAND_MAIN || hand == HAND_OFF))
+		{
+			let pmo = (pnum >= 0 && pnum < MAXPLAYERS) ? players[pnum].mo : null;
+			if (pmo && arbiter.GetInt("grip.can", "", hand, 0, pmo, 'RS_Held') == 0)
+				return TAKE_REFUSED;
+		}
+
 		int other = 1 - hand;
 
 		// THE SECOND-GRAB CASE, which is the whole reason this class exists.
