@@ -273,6 +273,17 @@ class RS_Pull : EventHandler
 		// object actually leaves through.
 		if (held && held.IsHeld(a)) return false;
 
+		// NOR ONTO A HAND THE ARBITER HAS GIVEN TO SOMEBODY ELSE (step 56).
+		//
+		// Locking is the first commitment -- it is what paints the target and what the
+		// flick gesture later fires -- so a hand that is mid-rack on a gun, inside the
+		// magazine pouch or holding the shield must not acquire a lock it is going to have
+		// to abandon. Read-only here: Lock paints, Start claims.
+		//
+		// Single player only, for the reason in rs_held.zs's Take: the ledger is built from
+		// hand poses, which are local, so a netgame must not branch on it.
+		if (!multiplayer && !CanClaimHand(hand, pmo)) return false;
+
 		// NOR SOMETHING THE OTHER HAND IS ALREADY PULLING OR HAS LOCKED.
 		//
 		// Both hands driving one actor is not a harmless duplicate: each flight
@@ -535,6 +546,17 @@ class RS_Pull : EventHandler
 		// Nor out of the other hand. Same reason as Lock: this is the call that
 		// would actually launch it.
 		else if (held.IsHeld(a))            why = "target is held by a hand already";
+		// A SIXTH REASON, AND IT WAS MISSING (step 56). Five guards asked this
+		// package's own questions and none asked the arbiter -- so a pull could
+		// start toward a hand that was mid-rack on a gun, inside the magazine
+		// pouch, or holding the shield, and the first thing the player knew about
+		// it was a barrel arriving. Named like its siblings so the refusal reads
+		// in the trace instead of being another silent false.
+		// Single player only, for the reason in rs_held.zs's Take: the ledger is
+		// built from hand poses, which are local, so a netgame must not branch a
+		// playsim decision on it.
+		else if (!multiplayer && !CanClaimHand(hand, pmo))
+			why = "the arbiter says this hand is spoken for";
 
 		if (why != "")
 		{
@@ -571,6 +593,16 @@ class RS_Pull : EventHandler
 		flyArc[hand] = (capArc < 0.0) ? wantArc : min(wantArc, capArc);
 
 		lockActor[hand] = null;
+
+		// CLAIM IT NOW, not on the first flight tic (step 56). The renewal in the
+		// flight loop was the only claim this package ever made, so for one tic the
+		// hand was flying something and the arbiter still said it was free -- and a
+		// holster draw or a store landing in that tic took a hand with a barrel
+		// already on its way to it. The grant is not re-tested here: the identical
+		// question was asked in the guard chain above through the arbiter's own
+		// wouldWin, so a refusal has already returned false.
+		ClaimHand(hand, pmo);
+
 		flyActor[hand] = a;
 		flyTic[hand]   = 0;
 		flyHold[hand]  = 0;   // a fresh pull gets a fresh catch window
@@ -843,9 +875,38 @@ class RS_Pull : EventHandler
 		if (!arbiter) arbWait = PULL_ARB_RETRY;
 	}
 
-	private void ClaimHand(int hand, PlayerPawn pmo)
+	// INBOUND, NOT LEGACY (CODER_PLAN step 56).
+	//
+	// This claimed through grip.claim, the PROTOCOL 2 form, which books at PRIO_LEGACY --
+	// the bottom of the ladder, below every named class. So a flight on its way to a hand
+	// was outranked by anything at all, and the arbiter could not tell "something is flying
+	// to this hand" from "a legacy consumer touched it once".
+	//
+	// PRIO_INBOUND is the rung the ladder already has for exactly this state. The number is
+	// INLINED rather than referenced: naming the arbiter's own constant would be a
+	// compile-time dependency on its file, which is fatal AND GLOBAL if that file is absent,
+	// and avoiding that is the whole reason the arbiter is reachable only by string. Its own
+	// note allows this -- "the ladder is a convention, not an enum".
+	const PULL_PRIO_INBOUND = 50;    // mirrors RS_GripArbiterService.PRIO_INBOUND
+
+	// Returns whether the hand is ours afterwards. The flight renewal IGNORES it on purpose
+	// -- a renewal is not a contest, so the arbiter grants it to the same owner every time,
+	// and aborting a flight mid-air because of a renewal would drop the object. Lock and
+	// Start read it, where a refusal is cheap.
+	private bool ClaimHand(int hand, PlayerPawn pmo)
 	{
-		if (arbiter && pmo) arbiter.GetInt("grip.claim", "", hand, GRIPSUBJ_None, pmo, 'RS_Pull');
+		if (!arbiter || !pmo) return true;      // no arbiter present: nothing can refuse us
+		return arbiter.GetInt("grip.claimex", PULL_PRIO_INBOUND .. " 0 pull",
+			hand, GRIPSUBJ_None, pmo, 'RS_Pull') == 1;
+	}
+
+	// WOULD IT BE OURS? The read-only half, for the two doors. grip.can runs the arbiter's
+	// own wouldWin -- the same function the claim runs -- so asking and then claiming cannot
+	// return two different answers.
+	private bool CanClaimHand(int hand, PlayerPawn pmo)
+	{
+		if (!arbiter || !pmo) return true;
+		return arbiter.GetInt("grip.can", "" .. PULL_PRIO_INBOUND, hand, 0, pmo, 'RS_Pull') == 1;
 	}
 
 	// Only ever releases our own claim (the arbiter refuses anything else), so it
