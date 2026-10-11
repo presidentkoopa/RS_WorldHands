@@ -160,7 +160,9 @@ class RS_GrabPolicy : EventHandler
 	//   pull.missed    the arc ran out with the hand never closed; it drops where it is
 	//   pull.blocked   it hit geometry on the way over; it drops there
 	//   pull.aborted   the pull was called off -- grab switched off, the player died, the
-	//                  level changed, or a GrabBecomeService swapped in something ungrabbable
+	//                  level changed, a GrabBecomeService swapped in something ungrabbable,
+	//                  or (since 2026-10-11) the grip arbiter gave that hand to a higher
+	//                  claim mid-flight and the pull let go of it
 	//
 	// Told on the machine running the hands, from the same tic the hands decided on, like
 	// everything else in this family.

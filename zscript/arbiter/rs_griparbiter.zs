@@ -245,6 +245,16 @@ class RS_GripArbiterService : Service
 	//   SYSTEM     100  the game itself: a cutscene, a death, a level change
 	//   MECHANISM   80  a gun part mid-action -- a rack, a bolt, a crane. Not interruptible:
 	//                   stopping half way leaves the weapon in a state nothing owns.
+	//   WORN        75  something strapped to the limb rather than gripped -- a forearm
+	//                   shield, a bracer, a gauntlet. It outranks everything that would put
+	//                   a loose object in that hand, because the limb is occupied, but it
+	//                   yields to MECHANISM because a worn thing does not close the fingers
+	//                   and so cannot stop the gun's own parts being worked. ADDED 2026-10-11
+	//                   on the owner's rule, in his words: "i'd want my other hand to be able
+	//                   to grab a mag from the ammopouch, shiled in hand or not". A WORN claim
+	//                   should be made PREEMPTABLE -- a non-preemptable holder refuses every
+	//                   challenger whatever its rank, which would defeat the whole point.
+	//                   This is the insertion the spacing note above was written for.
 	//   HELD        70  an object actually in the hand
 	//   BRACE       60  a support hand on a weapon. Yields to anything that HOLDS, which is
 	//                   the owner's rule: a brace is the weakest thing that still touches.
@@ -252,6 +262,7 @@ class RS_GripArbiterService : Service
 	//   REACH       40  a hand merely reaching at something
 	const PRIO_SYSTEM    = 100;
 	const PRIO_MECHANISM = 80;
+	const PRIO_WORN      = 75;
 	const PRIO_HELD      = 70;
 	const PRIO_BRACE     = 60;
 	const PRIO_INBOUND   = 50;

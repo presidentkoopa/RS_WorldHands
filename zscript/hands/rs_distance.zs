@@ -986,7 +986,45 @@ class RS_Pull : EventHandler
 				continue;
 			}
 
-			ClaimHand(h, pmo);
+			// THE RENEWAL, AND SINCE PHASE C THE ANSWER IS READ (2026-10-11).
+			//
+			// This called ClaimHand and threw the answer away. The reasoning on
+			// record was that "a renewal is not a contest, and aborting mid-air
+			// would drop the object" -- but dropping it is precisely what letting
+			// go means, and Abort below is the path this file already uses for
+			// every other reason a flight ends. A pull outranked by a gun part
+			// mid-rack had the barrel finish its arc and land in a hand the
+			// arbiter had already given to the mechanism, which is the collision
+			// the ladder exists to prevent.
+			//
+			// A NAMED OTHER OWNER IS REQUIRED, as in RS_Held: a refusal with the
+			// slot free or still ours is an arbiter fault, and the safe reading of
+			// a fault is to keep flying.
+			//
+			// SINGLE PLAYER ONLY, like the two doors above at :285 and :558, and
+			// for the same reason -- the ledger is built from hand poses, a hand
+			// pose is local, and a netgame must not branch a playsim act on it.
+			//
+			// Abort restores the flags, the size and the tumble, zeroes velocity
+			// and releases the hand, so the object simply falls from where it was
+			// -- it does not vanish and it does not keep coming. It is told as
+			// `pull.aborted`, the documented "the pull was called off" event, so
+			// every existing listener behaves exactly as it does for the other
+			// causes rather than needing to learn a new string.
+			// Claimed ONCE, whatever happens next: the renewal must not depend on
+			// which branch reads it, and calling it twice on a granted tic would
+			// book the same claim twice a tic for the life of the flight.
+			bool mine = ClaimHand(h, pmo);
+			if (!multiplayer && !mine)
+			{
+				String who = arbiter
+					? arbiter.GetString("grip.owner", "", h, 0, pmo, 'RS_Pull') : "";
+				if (who != "" && who != "None" && who != "RS_Pull")
+				{
+					Abort(h);
+					continue;
+				}
+			}
 
 			flyTic[h]++;
 			double t = double(flyTic[h]) / double(flyTotal[h]);

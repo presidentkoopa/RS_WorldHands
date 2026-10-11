@@ -1563,6 +1563,47 @@ class RS_Held : EventHandler
 				}
 				hClaimed[IX(pnum, h)] = hSubject[IX(pnum, h)];
 			}
+			// AND OBEY THE DENIAL (arbiter phase C, 2026-10-11).
+			//
+			// The renewal above has computed `granted` every tic since protocol 3
+			// and, when it came back false, DID NOTHING WITH IT: the object stayed
+			// in the hand and only `hClaimed` was left at 0. So the ladder was a
+			// number nobody obeyed -- a gun part claiming MECHANISM 80 mid-rack
+			// won the ledger while this package went on carrying a crate in the
+			// same hand. Priorities and pre-emption mean nothing until a denial
+			// can make a claimant stop, which is this branch and its two siblings
+			// in RS_Pull and RS_ShieldSaw.
+			//
+			// A NAMED OTHER OWNER IS REQUIRED, not merely a refusal. Dropping the
+			// player's object is the worst thing this loop can do by mistake, so
+			// it happens only when the arbiter can say who took the hand. A denial
+			// with the slot free or still ours would be an arbiter fault, and the
+			// safe reading of a fault is to keep holding.
+			//
+			// SINGLE PLAYER ONLY, for the same reason the take-side refusal above
+			// is: the ledger is built from claims made by consumers driven by hand
+			// poses, a hand pose is local, so in a netgame two machines can
+			// legitimately disagree about who owns a hand -- and a release is a
+			// playsim act. In multiplayer the behaviour is unchanged.
+			//
+			// Release with no velocity, which is the teardown path (death, level
+			// change), NOT a throw: being dispossessed is not throwing. If the
+			// other hand is still on the object, Release promotes it and only this
+			// hand lets go. The claim bookkeeping needs nothing here -- ClearClaims
+			// calls grip.release unconditionally and it is a documented no-op on a
+			// slot this package no longer holds.
+			else if (!multiplayer)
+			{
+				String who = arbiter.GetString("grip.owner", "", h, 0, pmo, 'RS_Held');
+				if (who != "" && who != "None" && who != "RS_Held")
+				{
+					if (Flag("rs_hand_debug", p, true))
+						Console.Printf("[RSHELD] hand %d lets go of %s -- %s outranked the hold",
+							h, a.GetClassName(), who);
+					Release(pnum, h);
+					continue;
+				}
+			}
 
 			// Doubles as a renewal -- this runs every tic while holding, which
 			// is exactly what keeps the lease alive.
